@@ -226,8 +226,8 @@ class GatherFreshnessV12Tests(unittest.TestCase):
                 {"gather": {"hold": [{"id": "I1", "kind": "ca_linh", "fresh": 30}], "random_fish": False, "monsters": []}},
             )
             out_path = w.path("out.jsonl")
-            rc = run_headless("--mode", "gather", "--seed", "1", "--ticks", "1", "--scenario", sc_path, "--out", out_path)
-            self.assertEqual(rc, 0)
+            rc, err = run_headless("--mode", "gather", "--seed", "1", "--ticks", "1", "--scenario", sc_path, "--out", out_path)
+            self.assertEqual(rc, 0, err)
             evs = events(read_jsonl(out_path))
             self.assertEqual(
                 evs,
@@ -250,7 +250,7 @@ class GatherFreshnessV12Tests(unittest.TestCase):
             in_dock = write_json(w.path("in_dock.json"), frames({"tick": 0, "interact": True}))
             inv_out = w.path("inv.json")
             out_dock = w.path("dock.jsonl")
-            rc2 = run_headless(
+            rc2, err2 = run_headless(
                 "--mode",
                 "gather",
                 "--seed",
@@ -266,7 +266,7 @@ class GatherFreshnessV12Tests(unittest.TestCase):
                 "--inventory-out",
                 inv_out,
             )
-            self.assertEqual(rc2, 0)
+            self.assertEqual(rc2, 0, err2)
             end_ev = [e for e in events(read_jsonl(out_dock)) if e["name"] == "gather_end"][0]
             with open(inv_out, encoding="utf-8") as f:
                 written = json.load(f)
