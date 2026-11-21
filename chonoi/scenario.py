@@ -322,7 +322,7 @@ def _validate_quan(b, tuning):
         dish = _stove_fixture_dish(stove)
         if dish is not None:
             dishes.append(dish)
-    freshness = tuning.get("freshness") if quan_uses_items(tuning, stock) else None
+    freshness = tuning.get("freshness") if quan_uses_items(tuning, stock, b) else None
     _validate_quan_dishes(customers, dishes, tuning["menu"], freshness)
 
 
@@ -335,12 +335,15 @@ def _quan_ingredient_kinds(menu):
     return set(KINDS_P2).union(*(dish["recipe"] for dish in menu.values()))
 
 
-def quan_uses_items(tuning, stock=None):
+def quan_uses_items(tuning, stock=None, scenario=None):
     if "freshness" not in tuning:
         return False
     if isinstance(stock, list):
         return True
     version = tuning.get("contract_version") or _current_contract_version()
+    if stock is None and scenario is not None:
+        if any(isinstance(customer.get("reserved"), list) for customer in scenario.get("customers", [])):
+            return True
     return version == "1.2"
 
 
@@ -380,7 +383,7 @@ def prepare_quan_customers(scenario, tuning, stock, *, menu=None):
     full_menu = tuning["menu"]
     menu = full_menu if menu is None else menu
     kinds = _quan_ingredient_kinds(full_menu)
-    fresh = quan_uses_items(tuning, stock)
+    fresh = quan_uses_items(tuning, stock, scenario)
     customers = []
     claimed = set()
     for fixture in scenario.get("customers", []):

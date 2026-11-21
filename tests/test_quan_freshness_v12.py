@@ -11,7 +11,7 @@ from chonoi.inputs import InputState
 from chonoi.rng import Streams
 from chonoi.scenario import load_scenario
 from chonoi.sim.quan import QuanSim
-from tests.helpers import ROOT, Workdir, write_json
+from tests.helpers import ROOT, Workdir, read_jsonl, write_json
 
 
 CONTRACT = json.loads((Path(ROOT) / "game.contract.json").read_text(encoding="utf-8"))
@@ -129,6 +129,21 @@ class QuanFreshnessTest(unittest.TestCase):
                      "hand": {"order_id": "C1", "dish_id": FISH, "base_price": 18}}
             path = write_json(work.path("valid.json"), {"quan": block})
             self.assertEqual(load_scenario(path, "quan", self.tuning), block)
+
+    def test_cli_loads_item_inventory_with_explicit_reservation(self):
+        with Workdir() as work:
+            stock = write_json(work.path("stock.json"), {"items": [item(1)]})
+            scenario = write_json(work.path("scenario.json"), {"quan": {"customers": [
+                order(1, 1, reserved=["I1"]),
+            ]}})
+            out = work.path("out.jsonl")
+            cmd = [sys.executable, "-m", "chonoi.headless", "--mode", "quan", "--seed", "1",
+                   "--ticks", "0", "--inventory", stock, "--scenario", scenario, "--out", out]
+            run = subprocess.run(cmd, cwd=ROOT, capture_output=True)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            first = read_jsonl(out)[0]
+            self.assertEqual(first["stock"], [item(1)])
+            self.assertEqual(first["customers"][0]["reserved"], ["I1"])
 
     def test_cli_rejects_legacy_count_inventory_and_bad_fixture(self):
         if CONTRACT["contract_version"] != "1.2":

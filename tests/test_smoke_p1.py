@@ -13,19 +13,25 @@ from helpers import (Workdir, close, events, frames, read_jsonl, run_headless, s
 
 
 def contract_hold(kinds):
-    with open("game.contract.json", encoding="utf-8") as contract:
-        if json.load(contract)["contract_version"] != "1.2":
-            return kinds
     return [{"id": f"I{index}", "kind": kind, "fresh": 100} for index, kind in enumerate(kinds, 1)]
 
 
 def contract_items(kinds):
-    hold = contract_hold(kinds)
-    return Counter(hold) if hold is kinds else hold
+    with open("game.contract.json", encoding="utf-8") as contract:
+        if json.load(contract)["contract_version"] != "1.2":
+            return Counter(kinds)
+    return contract_hold(kinds)
 
 
 def ingredient_counts(stock):
     return Counter(item["kind"] for item in stock) if isinstance(stock, list) else stock
+
+
+def stock_identity(stock):
+    if isinstance(stock, list):
+        # JSONL rounds numbers to 3 decimals. Compare the exact freshness unit recovered from each item.
+        return [(item["id"], item["kind"], round(item["fresh"] * 240)) for item in stock]
+    return stock
 
 
 def last_pos(rows):
@@ -101,7 +107,7 @@ class Contract(unittest.TestCase):
             for block in ({"player": {"pos": [101, 0]}}, {"player": {"pos": [5, -1]}},
                           {"nodes": [{"id": "N1", "kind": "bong_sung", "pos": [5, 3]}]},
                           {"nodes": [{"id": "N1", "kind": "bong_sung", "pos": [5, 0]}, {"id": "N1", "kind": "bong_sung", "pos": [9, 0]}]},
-                          {"hold": ["ca_loc"] * (tuning_gather()["hold_capacity"] + 1)}, {"vortices": []}):
+                          {"hold": contract_hold(["ca_loc"] * (tuning_gather()["hold_capacity"] + 1))}, {"vortices": []}):
                 sc = write_json(w.path("sc.json"), {"gather": block})
                 self.assertEqual(run_headless("--mode", "gather", "--seed", "1", "--ticks", "0", "--scenario", sc, "--out", out)[0], 2, block)
 
@@ -231,11 +237,12 @@ class Integration(unittest.TestCase):
             self.assertEqual(ingredient_counts(saved["items"]), {"bong_sung": 2, "ca_loc": 1})
             end = events(read_jsonl(w.path("r.jsonl")), "gather_end")[0]["data"]
             self.assertEqual(end["reason"], "docked")
-            self.assertEqual(end["inventory"], saved)
+            self.assertEqual(stock_identity(end["inventory"]["items"]), stock_identity(saved["items"]))
             code, err = run_headless("--mode", "quan", "--seed", "42", "--ticks", "0", "--inventory", inv,
                                      "--out", w.path("q.jsonl"))
             self.assertEqual(code, 0, err)
-            self.assertEqual(snapshots(read_jsonl(w.path("q.jsonl")))[0]["stock"], saved["items"])
+            self.assertEqual(stock_identity(snapshots(read_jsonl(w.path("q.jsonl")))[0]["stock"]),
+                             stock_identity(saved["items"]))
 
     def test_inv_01_not_written_when_tick_limit_first(self):
         with Workdir() as w:

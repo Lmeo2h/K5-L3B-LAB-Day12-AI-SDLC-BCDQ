@@ -11,6 +11,11 @@ Ngày 2026-11-21 (UTC+7), Python 3.12.2 trên Windows. Base `608baaa`, Contract 
 | Hai lượt `--mode quan --seed 1 --ticks 1200` dùng cùng kho và seed | File giống từng byte. SHA-256 `baa6ee70c39099b9a4f4e17f2afd743381007342093c355567e36ea741879b08` trên v1.1. |
 | `--mode day --days 1 --seed 1 --ticks 22200` | 0,708 giây trên v1.1, `state=finished`, `reason=days_complete`, `days_completed=1`. |
 
-Các test P1/P2 về khách, bếp, thực đơn và smoke chuyển kho chọn fixture theo phiên bản. Khi bật v1.2, các assertion tiêu thụ kiểm cá thể và giá sau một tick hao tươi, các assertion bàn giao đối chiếu nguyên mảng ở tick 0.
+## Sau khi Slice 1 merge (`7c31363`)
+
+- Test Slice 3 dùng adapter thật có 6 ca đạt, 1 ca CLI chờ bật nghiêm ngặt v1.2. Đã kiểm chứng CLI đọc kho cá thể và giữ đúng ID khi nhận fixture từ hai file.
+- Trong bản sao tạm bật Contract 1.2, chạy `test_quan_freshness_v12`, `test_quan_customers`, `test_quan_service`, `test_quan_v11` và `test_smoke_p1`: **57/57 đạt**. Kho đếm cũ thoát mã 2 trước khi tạo output. Nhánh chính của lát vẫn dùng phiên bản chuyển tiếp để chờ Slice 2.
+- Lần chạy toàn suite sau khi rebase Slice 1 có 119 ca. Có 6 lỗi từ `test_day_shop_pause` và `test_gather_monsters`: fixture giỏ dạng chuỗi hoặc `DaySim` cũ gọi `.items()` trên mảng cá thể. `check_team.py` đạt. Cần chạy lại toàn suite sau khi các lát liên quan merge.
+- [Smoke bàn giao hai tiến trình](integration.md) xác nhận ID, loại và đơn vị độ tươi của từng cá thể ở tick 0. Test P1/P2 giữ các assertion về luật và dùng fixture kho cá thể khi bật v1.2.
 
 Thứ tự trong brief Slice 3 đặt `dish_ready` cùng bước timer trước sự kiện ươn. Mục thứ tự trên lab board liệt kê xét món chín/cháy sau phần giữ chỗ bị ươn. Bản này theo thứ tự brief của lát. Cần nhóm thống nhất trường hợp hai sự kiện trùng tick trước khi gắn tag.

@@ -11,4 +11,14 @@ python -m chonoi.headless --mode quan --seed 1 --ticks 0 --inventory stock.json 
 
 Cả hai lệnh trả mã 0. Kho ở snapshot tick 0 khớp file: `{"bong_sung":1,"ca_loc":1}`.
 
-Đây là lần chạy thử checklist phút 20 trên preset cũ. Cần lặp lại sau khi bật v1.2 bằng fixture `hold` dạng cá thể. Khi đó đối chiếu mảng `items` với `stock` theo `id`, `kind`, `fresh` và chạy thêm ca kho đếm cũ trả mã 2 trước khi tạo output.
+## Sau khi Slice 1 merge (`7c31363`)
+
+Chạy lại hai lệnh trên với fixture `hold` chứa `I10/ca_loc/30` và `I2/bong_sung/100`. Cả hai lệnh trả mã 0. Gather phát `spoiled` cho `I10` ở tick 1 trước khi cập bến. Hai bản ghi xuất theo thứ tự `I2, I10`.
+
+```text
+file kho:       [{"id":"I2","kind":"bong_sung","fresh":99.991667},{"id":"I10","kind":"ca_loc","fresh":29.991667}]
+snapshot tick 0: [{"id":"I2","kind":"bong_sung","fresh":99.992},{"id":"I10","kind":"ca_loc","fresh":29.992}]
+Đơn vị 1/240: I2/bong_sung/23998, I10/ca_loc/7198, giống nhau ở file kho, gather_end và snapshot.
+```
+
+JSONL dùng 3 chữ số thập phân, bộ ghi file kho dùng 6 chữ số. Hai luồng phục hồi chính xác cùng đơn vị độ tươi; biểu diễn số thập phân giữa file kho và JSONL có khác biệt. Hai lượt Quán 1.200 tick cùng seed và file kho giống từng byte, SHA-256 `48ca18b046d2758e111e97d6566d09ed0b2a9af59e9110f000629e4daf66e4f9`.
