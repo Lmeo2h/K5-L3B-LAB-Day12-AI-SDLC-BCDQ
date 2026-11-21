@@ -9,13 +9,15 @@ from collections import Counter
 
 from .errors import BadInput
 from .ids import id_key
-from .inventory import KINDS_P1, validate_items
+from .inventory import KINDS_P2, validate_items
 
 GATHER_KEYS = {"player", "hold", "nodes", "fish", "random_fish", "time_left_ticks"}
 GATHER_PLAYER_KEYS = {"pos", "vel", "heading_deg", "hp", "oxygen_ticks", "zero_oxy_ticks",
                       "invuln_ticks", "catch_cd_ticks"}
-NODE_KINDS = ("bong_dien_dien", "bong_sung")
-FISH_KINDS = ("ca_linh", "ca_loc")
+NODE_KINDS = ("bong_dien_dien", "bong_sung", "keo_neo")
+NODE_KEYS = {"id", "kind", "pos", "regrow_ticks"}
+FISH_KINDS = ("ca_linh", "ca_loc", "ca_keo")
+FISH_KEYS = {"id", "kind", "pos", "heading_deg", "age_ticks"}
 QUAN_PLAYER_KEYS = {"pos", "vel"}
 QUAN_KEYS = {"player", "stock", "hand", "stoves", "tables", "customers", "random_customers",
              "reputation", "time_left_ticks"}
@@ -95,7 +97,7 @@ def _validate_gather(b, tuning):
         raise BadInput("random_fish phải là boolean")
     if "hold" in b:
         h = b["hold"]
-        if not isinstance(h, list) or any(k not in KINDS_P1 for k in h):
+        if not isinstance(h, list) or any(k not in KINDS_P2 for k in h):
             raise BadInput("hold phải là mảng id nguyên liệu hợp lệ")
         if len(h) > g["hold_capacity"]:
             raise BadInput("hold vượt sức chứa")
@@ -127,6 +129,9 @@ def _validate_gather(b, tuning):
         if p["zero_oxy_ticks"] > 0 and not (oxy == 0 and pos[1] > g["surface_depth"]):
             raise BadInput("player.zero_oxy_ticks > 0 chỉ khi oxy = 0 và đang dưới nước")
     for n in b.get("nodes", []):
+        extra_n = set(n) - NODE_KEYS
+        if extra_n:
+            raise BadInput(f"nodes.{n['id']}: trường lạ {sorted(extra_n)}")
         if n.get("kind") not in NODE_KINDS:
             raise BadInput(f"nodes.{n['id']}: kind phải là một trong {NODE_KINDS}")
         _pos(f"nodes.{n['id']}.pos", n.get("pos"), bounds)
@@ -135,6 +140,9 @@ def _validate_gather(b, tuning):
         if "regrow_ticks" in n:
             _nonneg_int(f"nodes.{n['id']}.regrow_ticks", n["regrow_ticks"])
     for f in b.get("fish", []):
+        extra_f = set(f) - FISH_KEYS
+        if extra_f:
+            raise BadInput(f"fish.{f['id']}: trường lạ {sorted(extra_f)}")
         if f.get("kind") not in FISH_KINDS:
             raise BadInput(f"fish.{f['id']}: kind phải là một trong {FISH_KINDS}")
         _pos(f"fish.{f['id']}.pos", f.get("pos"), bounds)
@@ -142,6 +150,8 @@ def _validate_gather(b, tuning):
             raise BadInput(f"fish.{f['id']}: đàn cá phải ở dưới nước")
         if "heading_deg" in f and not _num(f["heading_deg"]):
             raise BadInput(f"fish.{f['id']}.heading_deg phải là số")
+        if "age_ticks" in f:
+            _nonneg_int(f"fish.{f['id']}.age_ticks", f["age_ticks"])
 
 
 def _validate_quan(b, tuning):
