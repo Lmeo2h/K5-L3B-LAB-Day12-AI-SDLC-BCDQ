@@ -21,7 +21,7 @@ def _cooked_items(counts, stock):
 
 
 def _first_tick_price(listed):
-    return listed - (CONTRACT["contract_version"] == "1.2")
+    return listed - (CONTRACT["contract_version"] in ("1.2", "1.3"))
 
 
 def _run_headless_py(*args):

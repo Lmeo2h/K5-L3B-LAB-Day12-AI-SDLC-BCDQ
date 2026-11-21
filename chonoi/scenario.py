@@ -344,7 +344,7 @@ def quan_uses_items(tuning, stock=None, scenario=None):
     if stock is None and scenario is not None:
         if any(isinstance(customer.get("reserved"), list) for customer in scenario.get("customers", [])):
             return True
-    return version == "1.2"
+    return version in ("1.2", "1.3")
 
 
 def prepare_quan_stock(stock, tuning):
