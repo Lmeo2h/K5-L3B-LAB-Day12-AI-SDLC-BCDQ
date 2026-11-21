@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0 / v1.0.0] - Phase 4 (TICKET-04) — Phát hành v1.0.0
+- **Test Contract `v1.3`:** Bổ sung `bench_cmd` và `soak_cmd` ở gốc `game.contract.json`; giữ nguyên gameplay, tuning, kho cá thể và JSONL `v1.2`.
+- **Soak headless (`chonoi/soak.py`):** Hỗ trợ chạy bot tất định `N` ngày liên tiếp (`--seed 7 --days 10 --out soak.json`), `DaySim` lặp kế hoạch `D1–D5` cho Ngày `6–10`.
+- **Render Benchmark (`chonoi/bench.py`):** Đo hiệu năng render cảnh lặn `1280×720` (làm nóng `3s` + đo `duration`s), xuất `bench.json` (`avg_fps`, `p1_low_fps`, `frames`, `measured_s`, `load_ms`).
+- **HUD & Khả năng tiếp cận (`chonoi/web/index.html`):** Đầy đủ 3 cảnh báo (Thủy quái gần, Oxy thấp/Hết hơi, Khách sắp giận `< 25%`) kèm biểu tượng + chữ và chế độ tương phản cao (`C`/`H`).
+- **Đóng gói & Phát hành:** `README.md` (chạy clone sạch ≤ 3 lệnh), `LICENSE` (MIT), `CREDITS.md`, `tools/package_release.py` (`chonoi-v1.0.0.zip`), phản tư `docs/members/*.md`, tag `phase-4` & GitHub Release `v1.0.0`.
+
 ## [1.2.0] - Phase 3 (TICKET-03) — Mùa Nước Nổi: Độ tươi & Kho cá thể
 
 ### Breaking Changes (Từ v1.1 lên v1.2)
@@ -27,5 +34,12 @@
 - `scenario.quan.stock`: đổi `{"ca_loc": 1}` thành `[{"id": "I1", "kind": "ca_loc", "fresh": 100}]`.
 - `scenario.quan.customers[].reserved`: đổi `{"ca_loc": 1}` thành `["I1"]`.
 
-## Unreleased
-- Phase 1 & Phase 2 core (`gather`, `quan`, `day`, `shop`, `pause`).
+## [1.1.0] - Phase 2 (TICKET-02) — Một ngày ở chợ nổi
+- **Nâng cấp Test Contract `v1.1`:** Mở rộng 6 nguyên liệu (`+ca_keo`, `+keo_neo`), `N5`/`N6`, 8 đàn cá bơi/đổi hướng mỗi 120 ticks/sinh cá mỗi 360 ticks (`fish_max: 12`), ngạt bước chạm `0` (`choke`).
+- **Cá Sấu Năm Chèo (`chonoi/sim/monsters.py`):** `M1` (ngày 1+) và `M2` (ngày 3+), `patrol`/`chase`/`recoil` 60 bước, rơi `floor(len(hold)/2)` LIFO, bất tử `90` ticks, `faint(cause="monster")`.
+- **Quán mở rộng (`chonoi/sim/quan.py`):** 2 bếp (`B1`, `B2`), 4 bàn (`T1`–`T4`), 6 món ăn, lọc món theo `day_plan` trong `--mode day`.
+- **Vòng Ngày, Shop & Pause (`chonoi/sim/day.py`, `chonoi/sim/shop.py`, `chonoi/runner.py`):** `--mode day --days 1..5`, nâng cấp `oxygen`/`hp` L1–L2, `pause`/`resumed` trên cả 3 mode, giao diện Menu/Intro/Shop/HUD v1.1 (`>= 18px`).
+
+## [1.0.0-p1] - Phase 1 (PRD-0) — Lõi mô phỏng `gather` & `quan`
+- **Buổi sáng (`gather`):** Bơi 60 Hz, oxy trừ/hồi, ngạt & ngất, giỏ LIFO (`hold_capacity: 12`), hái nút mặt nước, bắt cá dưới nước, cập bến & xuất file kho nguyên tử.
+- **Buổi tối (`quan`):** Đón khách theo lịch, giữ chỗ nguyên liệu, kiên nhẫn (`customer_left`), bếp nấu/bưng/phục vụ ưu tiên `(khoảng cách, bếp < bàn, id_key)`, thanh toán/boa/uy tín & kết ca `quan_end`.
