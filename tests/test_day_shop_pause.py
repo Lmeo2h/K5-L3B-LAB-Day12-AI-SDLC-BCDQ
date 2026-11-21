@@ -124,7 +124,14 @@ class DaySimAndEnvelopeTests(unittest.TestCase):
         t["gather"]["duration_s"] = 1  # 60 ticks for fast unit test
         t["quan"]["duration_s"] = 1    # 60 ticks
         t["shop"]["max_ticks"] = 5
-        scenario = {"gather": {"hold": ["ca_loc", "bong_sung"]}}
+        scenario = {
+            "gather": {
+                "hold": [
+                    {"id": "I1", "kind": "ca_loc", "fresh": 100},
+                    {"id": "I2", "kind": "bong_sung", "fresh": 100},
+                ]
+            }
+        }
 
         sess = Session("day", t, scenario, seed=1, days=2)
         snap0 = sess.snapshot()
@@ -149,7 +156,7 @@ class DaySimAndEnvelopeTests(unittest.TestCase):
         )
         self.assertEqual(sess.snapshot()["phase"], "quan")
         self.assertEqual(sess.snapshot()["phase_tick"], 0)
-        self.assertEqual(sess.snapshot()["stock"], {"bong_sung": 1, "ca_loc": 1})
+        self.assertEqual([it["kind"] for it in sess.snapshot()["stock"]], ["ca_loc", "bong_sung"])
 
         # Run quan to completion (60 ticks) -> quan_end(quan), phase_start(shop)
         quan_events = []
@@ -165,7 +172,7 @@ class DaySimAndEnvelopeTests(unittest.TestCase):
         snap_shop = sess.snapshot()
         self.assertEqual(snap_shop["phase"], "shop")
         self.assertEqual(snap_shop["phase_tick"], 0)
-        self.assertEqual(snap_shop["stock"], {"bong_sung": 1, "ca_loc": 1})
+        self.assertEqual([it["kind"] for it in snap_shop["stock"]], ["ca_loc", "bong_sung"])
 
         # Buy oxygen L1 and finish shop -> advances to Day 2 gather, leftover stock/hold cleared
         evs_buy = sess.step(_inp(buy="oxygen", edges={"shop_done"}))
@@ -202,7 +209,12 @@ class DaySimAndEnvelopeTests(unittest.TestCase):
 
     def test_gather_faint_in_day_mode_transitions_to_empty_quan(self):
         t = copy.deepcopy(self.tuning)
-        scenario = {"gather": {"player": {"pos": [50, 10], "oxygen_ticks": 1, "hp": 1}, "hold": ["ca_loc"]}}
+        scenario = {
+            "gather": {
+                "player": {"pos": [50, 10], "oxygen_ticks": 1, "hp": 1},
+                "hold": [{"id": "I1", "kind": "ca_loc", "fresh": 100}],
+            }
+        }
         sess = Session("day", t, scenario, seed=1, days=1)
         sess.sim.sub.hp = 1
         sess.sim.sub.oxygen_ticks = 0
@@ -211,7 +223,7 @@ class DaySimAndEnvelopeTests(unittest.TestCase):
         names = [e["name"] for e in evs]
         self.assertIn("gather_end", names)
         self.assertEqual(sess.sim.phase, "quan")
-        self.assertEqual(sess.snapshot()["stock"], {})
+        self.assertEqual(sess.snapshot()["stock"], [])
 
 
 class PauseAcrossAllModesTests(unittest.TestCase):
