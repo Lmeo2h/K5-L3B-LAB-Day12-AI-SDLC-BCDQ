@@ -18,4 +18,10 @@ Ngày 2026-11-21 (UTC+7), Python 3.12.2 trên Windows. Base `608baaa`, Contract 
 - Lần chạy toàn suite sau khi rebase Slice 1 có 119 ca. Có 6 lỗi từ `test_day_shop_pause` và `test_gather_monsters`: fixture giỏ dạng chuỗi hoặc `DaySim` cũ gọi `.items()` trên mảng cá thể. `check_team.py` đạt. Cần chạy lại toàn suite sau khi các lát liên quan merge.
 - [Smoke bàn giao hai tiến trình](integration.md) xác nhận ID, loại và đơn vị độ tươi của từng cá thể ở tick 0. Test P1/P2 giữ các assertion về luật và dùng fixture kho cá thể khi bật v1.2.
 
+## Ghép thử các lát trong bản sao tạm
+
+Ghép Slice 2 tại `9e25f87` và runtime/kiểm thử Slice 4 tại `bedb846` vào mã Slice 3, bật 1.2 trong bản sao. Lệnh headless `--mode day --days 1 --seed 1 --ticks 22200` hoàn tất **0,857 giây**, dòng `end` có `state=finished`, `reason=days_complete`, `days_completed=1` và `sim_tick=22200`.
+
+Toàn suite của bản ghép tạm có **119 đạt, 6 lỗi, tổng 125**. Các lỗi nằm ở fixture `hold` dạng chuỗi của `test_gather_monsters` và `test_day_shop_pause`, cùng assertion còn yêu cầu phiên bản 1.1 trong `test_gather_fish_v11`. Kết quả này dùng để phối hợp sửa ở các lát sở hữu test trước khi chạy lại trên commit bàn giao.
+
 Thứ tự trong brief Slice 3 đặt `dish_ready` cùng bước timer trước sự kiện ươn. Mục thứ tự trên lab board liệt kê xét món chín/cháy sau phần giữ chỗ bị ươn. Bản này theo thứ tự brief của lát. Cần nhóm thống nhất trường hợp hai sự kiện trùng tick trước khi gắn tag.
