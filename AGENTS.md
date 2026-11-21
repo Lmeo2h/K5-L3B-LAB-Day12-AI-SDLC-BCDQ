@@ -5,12 +5,15 @@
 ## Lệnh
 - Test: `PYTHONPATH=tests:. python3 -m unittest discover -s tests -v` (PowerShell: `$env:PYTHONPATH="tests;."; python -m unittest discover -s tests -v`)
 - Headless: `python3 -m chonoi.headless --mode gather|quan|day [--days 1..5] --seed 1 --ticks 600 --out out.jsonl`
-- Chơi thử trên trình duyệt: `python3 -m chonoi.live --mode gather|quan|day [--days 1..5]` (mở địa chỉ in ra; WASD, E, Space, Esc/P, R)
+- Chơi thử trên trình duyệt: `python3 -m chonoi.live --mode gather|quan|day [--days 1..5]` (mở địa chỉ in ra; WASD, E, Space, Esc/P, C/H, R)
+- Benchmark render (`bench_cmd`): `python3 -m chonoi.bench --seed 42 --duration 30 --out bench.json`
+- Soak 10 Ngày (`soak_cmd`): `python3 -m chonoi.soak --seed 7 --days 10 --out soak.json`
+- Đóng gói phát hành: `python3 tools/package_release.py`
 - Kiểm thành viên: `python3 tools/check_team.py`
 
 ## Cấu trúc & quy ước
 - (Starter Python là TÙY CHỌN; nhóm có thể dùng ngôn ngữ khác nếu giữ Test Contract.) Khung do giảng viên cấp: `chonoi/{headless,inputs,scenario,contract,rng,ids,jsonl,inventory,runner,live}.py` và `chonoi/web/`. Hạn chế sửa; nếu phải sửa thì báo cả nhóm và ghi lại lý do.
-- Luật chơi của nhóm: `chonoi/sim/{gather,monsters,quan,day,shop}.py` (Test Contract `v1.2`, xem `CHANGELOG.md` cho thay đổi schema kho cá thể và `FRESH_SCALE=240`).
+- Luật chơi của nhóm: `chonoi/sim/{gather,monsters,quan,day,shop}.py` (Test Contract `v1.3`, giữ gameplay/kho cá thể `v1.2` + `FRESH_SCALE=240`, xem `CHANGELOG.md`).
 - **Số liệu chỉ đọc từ `game.contract.json` / dữ liệu**, không hard-code trong luật.
 - Mọi số ngẫu nhiên đi qua `Streams` (`chonoi/rng.py`); không dùng `random` toàn cục, không dùng đồng hồ hệ thống.
 - Sắp danh sách thực thể bằng `ids.sort_by_id`; cấp id bằng `IdAllocator` (`I1, I2, ...` liên tục xuyên pha/Ngày).
