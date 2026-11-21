@@ -15,17 +15,19 @@ class DaySim:
     def __init__(self, tuning, scenario, streams, ids, days=1):
         self.tuning = tuning
         self.scenario = scenario or {}
+        day_cfg = self.scenario.get("day", {})
         self.rng = streams
         self.ids = ids
         self.days = days
         self.day = 1
         self.days_completed = 0
         self.phase = "gather"
-        self.money = 0
-        self.earned = 0
-        self.reputation = tuning["quan"]["reputation_initial"]
-        self.upgrades = {"oxygen": 0, "hp": 0}
-        self.active_upgrades = {"oxygen": 0, "hp": 0}
+        self.money = day_cfg.get("money", 0)
+        self.earned = day_cfg.get("earned", 0)
+        self.reputation = day_cfg.get("reputation", tuning["quan"]["reputation_initial"])
+        self.upgrades = dict(day_cfg.get("upgrades", {}))
+        self.active_upgrades = dict(self.upgrades)
+        self._day_plan_overrides = self._parse_day_plan_overrides(day_cfg.get("day_plan"))
         self.day_plan = self._get_day_plan(self.day)
         self.done = False
         self.reason = None
@@ -40,26 +42,54 @@ class DaySim:
     def phase_tick(self) -> int:
         return getattr(self.sub, "phase_tick", 0)
 
+    def _parse_day_plan_overrides(self, raw) -> dict:
+        if not raw:
+            return {}
+        if isinstance(raw, list):
+            return {int(item["day"]): item for item in raw if isinstance(item, dict) and "day" in item}
+        if isinstance(raw, dict):
+            return {int(k): v for k, v in raw.items()}
+        return {}
+
+    def _compute_ingredients(self, dishes: dict) -> dict:
+        menu = self.tuning.get("menu", {})
+        ing = {}
+        for dish_id, count in dishes.items():
+            recipe = menu.get(dish_id, {}).get("recipe", {})
+            for kind, qty in recipe.items():
+                ing[kind] = ing.get(kind, 0) + qty * count
+        return {k: ing[k] for k in sorted(ing)}
+
     def _get_day_plan(self, day: int) -> dict:
-        plans = self.tuning.get("day_plan", {})
+        if day in self._day_plan_overrides:
+            ov = copy.deepcopy(self._day_plan_overrides[day])
+            dishes = ov.get("dishes", {})
+            ingredients = ov.get("ingredients") or self._compute_ingredients(dishes)
+            return {"dishes": dishes, "ingredients": ingredients}
+
+        plans = self.tuning.get("day_plan", [])
+        entry = None
         if isinstance(plans, list):
-            idx = min(max(0, day - 1), len(plans) - 1) if plans else 0
-            return copy.deepcopy(plans[idx]) if plans else {"day": day, "dishes": {}}
-        key = str(day)
-        if key in plans:
-            return copy.deepcopy(plans[key])
-        if day in plans:
-            return copy.deepcopy(plans[day])
-        if plans:
-            first_key = sorted(plans.keys())[0]
-            return copy.deepcopy(plans[first_key])
-        return {"day": day, "dishes": {d: 1 for d in self.tuning.get("menu", {})}}
+            for item in plans:
+                if item.get("day") == day:
+                    entry = item
+                    break
+            if entry is None and plans:
+                entry = plans[min(day - 1, len(plans) - 1)]
+        elif isinstance(plans, dict):
+            entry = plans.get(str(day)) or plans.get(day)
+        if entry:
+            dishes = copy.deepcopy(entry.get("dishes", {}))
+            ingredients = copy.deepcopy(entry.get("ingredients")) or self._compute_ingredients(dishes)
+            return {"dishes": dishes, "ingredients": ingredients}
+        dishes = {d: 1 for d in self.tuning.get("menu", {})}
+        return {"dishes": dishes, "ingredients": self._compute_ingredients(dishes)}
 
     def _make_day_start_events(self) -> list:
         return [
-            ("day_start", {"day": self.day}),
+            ("day_start", {}),
             ("day_plan", copy.deepcopy(self.day_plan)),
-            ("phase_start", {"phase": "gather", "day": self.day}),
+            ("phase_start", {}),
         ]
 
     def _upgraded_gather_tuning(self) -> dict:
@@ -73,10 +103,6 @@ class DaySim:
                 tier = tiers[oxy_lvl - 1]
                 if "oxygen_max_s" in tier:
                     t["gather"]["oxygen_max_s"] = tier["oxygen_max_s"]
-                elif "oxygen_max_ticks" in tier:
-                    t["gather"]["oxygen_max_s"] = tier["oxygen_max_ticks"] / float(t.get("tick_hz", 60))
-                elif "value" in tier:
-                    t["gather"]["oxygen_max_s"] = tier["value"]
         hp_lvl = int(self.active_upgrades.get("hp", 0))
         if hp_lvl > 0:
             tiers = src.get("hp")
@@ -84,15 +110,14 @@ class DaySim:
                 tier = tiers[hp_lvl - 1]
                 if "hp_max" in tier:
                     t["gather"]["hp_max"] = tier["hp_max"]
-                elif "value" in tier:
-                    t["gather"]["hp_max"] = tier["value"]
         return t
 
     def _start_gather(self):
         self.phase = "gather"
         t = self._upgraded_gather_tuning()
-        sc = copy.deepcopy(self.scenario.get("gather", {}))
-        sc["hold"] = []  # Xóa giỏ thừa khi sang ngày mới
+        sc = copy.deepcopy(self.scenario.get("gather", {})) if self.day == 1 else {}
+        if self.day > 1:
+            sc.pop("hold", None)
         kwargs = {}
         if "day" in inspect.signature(GatherSim.__init__).parameters:
             kwargs["day"] = self.day
@@ -104,7 +129,7 @@ class DaySim:
 
     def _start_quan(self, inventory: dict):
         self.phase = "quan"
-        sc = copy.deepcopy(self.scenario.get("quan", {}))
+        sc = copy.deepcopy(self.scenario.get("quan", {})) if self.day == 1 else {}
         sc.pop("stock", None)
         sc.pop("reputation", None)
         kwargs = {"inventory": inventory}
@@ -117,7 +142,7 @@ class DaySim:
         sim.reputation = self.reputation
         return sim
 
-    def _start_shop(self):
+    def _start_shop(self, leftover_stock: dict):
         self.phase = "shop"
         return ShopSim(
             self.tuning,
@@ -128,27 +153,31 @@ class DaySim:
             earned=self.earned,
             reputation=self.reputation,
             upgrades=self.upgrades,
+            stock=leftover_stock,
             day=self.day,
         )
 
     def snapshot(self) -> dict:
         snap = self.sub.snapshot()
         snap["day"] = self.day
-        snap["days"] = self.days
-        snap["days_completed"] = self.days_completed
         snap["day_plan"] = copy.deepcopy(self.day_plan)
         snap["upgrades"] = dict(self.upgrades)
         snap["active_upgrades"] = dict(self.active_upgrades)
         return snap
 
     def step(self, inp):
+        """Trả về list (day, phase, name, data) để runner giữ đúng pha cũ/mới trên từng event."""
         events = []
         if self._pending_events:
-            events.extend(self._pending_events)
+            for name, data in self._pending_events:
+                events.append((self.day, self.phase, name, data))
             self._pending_events = []
 
+        old_phase = self.phase
+        old_day = self.day
         sub_events = self.sub.step(inp)
-        events.extend(sub_events)
+        for name, data in sub_events:
+            events.append((old_day, old_phase, name, data))
         self.money = self.sub.money
         self.earned = self.sub.earned
         self.reputation = self.sub.reputation
@@ -156,38 +185,25 @@ class DaySim:
         if not self.sub.done:
             return events
 
-        if self.phase == "gather":
+        if old_phase == "gather":
             inv = {} if self.sub.reason == "fainted" else self.sub.inventory_items()
             self.sub = self._start_quan(inv)
-            events.append(("phase_start", {"phase": "quan", "day": self.day}))
-        elif self.phase == "quan":
-            self.sub = self._start_shop()
-            events.append(("phase_start", {"phase": "shop", "day": self.day}))
-        elif self.phase == "shop":
+            events.append((self.day, "quan", "phase_start", {}))
+        elif old_phase == "quan":
+            leftover = {k: v for k, v in self.sub.stock.items() if v > 0}
+            self.sub = self._start_shop(leftover)
+            events.append((self.day, "shop", "phase_start", {}))
+        elif old_phase == "shop":
             self.upgrades = dict(self.sub.upgrades)
-            events.append(("day_end", {
-                "day": self.day,
-                "money": self.money,
-                "earned": self.earned,
-                "reputation": self.reputation,
-                "upgrades": dict(self.upgrades),
-            }))
             self.days_completed += 1
             if self.days_completed >= self.days:
                 self.done = True
                 self.reason = "days_complete"
-                events.append(("days_completed", {
-                    "days": self.days,
-                    "days_completed": self.days_completed,
-                    "reason": "days_complete",
-                    "money": self.money,
-                    "earned": self.earned,
-                    "reputation": self.reputation,
-                }))
             else:
                 self.day += 1
                 self.active_upgrades = dict(self.upgrades)
                 self.day_plan = self._get_day_plan(self.day)
                 self.sub = self._start_gather()
-                self._pending_events = self._make_day_start_events()
+                for name, data in self._make_day_start_events():
+                    events.append((self.day, "gather", name, data))
         return events

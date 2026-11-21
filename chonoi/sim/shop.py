@@ -6,7 +6,7 @@ class ShopSim:
     phase = "shop"
 
     def __init__(self, tuning, scenario=None, streams=None, ids=None, money=0, earned=0,
-                 reputation=None, upgrades=None, day=1):
+                 reputation=None, upgrades=None, stock=None, day=1):
         t = tuning.get("shop", {})
         self.t = t
         self.tick_hz = float(tuning.get("tick_hz", 60))
@@ -17,9 +17,8 @@ class ShopSim:
         self.money = money
         self.earned = earned
         self.reputation = tuning["quan"]["reputation_initial"] if reputation is None else reputation
-        self.upgrades = {"oxygen": 0, "hp": 0}
-        if upgrades:
-            self.upgrades.update(upgrades)
+        self.upgrades = dict(upgrades) if upgrades else {}
+        self.stock = {k: v for k, v in (stock or {}).items() if v > 0}
         self.done = False
         self.reason = None
 
@@ -34,13 +33,9 @@ class ShopSim:
 
     def snapshot(self) -> dict:
         return {
-            "stock": {},
+            "stock": dict(self.stock),
             "upgrades": dict(self.upgrades),
-            "shop": {
-                "time_left_ticks": self.time_left_ticks,
-                "max_ticks": self.max_ticks,
-                "upgrades": dict(self.upgrades),
-            },
+            "time_left_ticks": self.time_left_ticks,
         }
 
     def step(self, inp):
@@ -55,30 +50,18 @@ class ShopSim:
         if inp.pressed("shop_done"):
             self.done = True
             self.reason = "done"
-            events.append(("shop_end", {
-                "reason": "done",
-                "money": self.money,
-                "earned": self.earned,
-                "reputation": self.reputation,
-                "upgrades": dict(self.upgrades),
-            }))
+            events.append(("shop_end", {"reason": "done"}))
             return events
 
         if self.time_left_ticks <= 0:
             self.done = True
             self.reason = "time"
-            events.append(("shop_end", {
-                "reason": "time",
-                "money": self.money,
-                "earned": self.earned,
-                "reputation": self.reputation,
-                "upgrades": dict(self.upgrades),
-            }))
+            events.append(("shop_end", {"reason": "time"}))
         return events
 
     def _handle_buy(self, buy, events):
         if not isinstance(buy, str) or buy not in ("oxygen", "hp"):
-            events.append(("buy_failed", {"action": buy, "reason": "unknown_upgrade"}))
+            events.append(("buy_failed", {"action": buy, "reason": "unknown"}))
             return
         tiers = self._tiers_for(buy)
         cur_lvl = int(self.upgrades.get(buy, 0))
@@ -86,17 +69,16 @@ class ShopSim:
             events.append(("buy_failed", {"action": buy, "reason": "max_level"}))
             return
         tier = tiers[cur_lvl]
-        cost = int(tier.get("cost", tier.get("price", 0)))
-        if self.money < cost:
-            events.append(("buy_failed", {"action": buy, "reason": "insufficient_money"}))
+        price = int(tier.get("price", tier.get("cost", 0)))
+        if self.money < price:
+            events.append(("buy_failed", {"action": buy, "reason": "funds"}))
             return
-        self.money -= cost
+        self.money -= price
         new_lvl = cur_lvl + 1
         self.upgrades[buy] = new_lvl
         events.append(("bought", {
-            "kind": buy,
+            "upgrade": buy,
             "level": new_lvl,
-            "cost": cost,
+            "price": price,
             "money": self.money,
-            "upgrades": dict(self.upgrades),
         }))
