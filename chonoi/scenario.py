@@ -1,13 +1,14 @@
 """Nạp và kiểm scenario (Contract D). Trả về dict của đúng khối theo mode.
 
-KHUNG: kiểm cú pháp, id trùng, bộ đếm âm, khoang vượt sức chứa, trường lạ.
-TODO(nhóm): bổ sung kiểm mâu thuẫn mức luật mà nhóm cần (khách giữ chỗ quá kho, đơn assigned
-phải có đúng một món, khách eating thiếu giá/tip...) — xem PRD-0 mục D và 'Mâu thuẫn -> mã 2'.
+Kiểm cú pháp, miền dữ liệu và mâu thuẫn giữa các thực thể trong fixture.
 """
 
 import json
 
+from collections import Counter
+
 from .errors import BadInput
+from .ids import id_key
 from .inventory import KINDS_P1, validate_items
 
 GATHER_KEYS = {"player", "hold", "nodes", "fish", "random_fish", "time_left_ticks"}
@@ -18,6 +19,9 @@ FISH_KINDS = ("ca_linh", "ca_loc")
 QUAN_PLAYER_KEYS = {"pos", "vel"}
 QUAN_KEYS = {"player", "stock", "hand", "stoves", "tables", "customers", "random_customers",
              "reputation", "time_left_ticks"}
+CUSTOMER_KEYS = {"id", "table_id", "dish_id", "order_tick", "state", "patience_ticks_left",
+                 "eat_ticks_left", "order_status", "reserved", "base_price", "tip"}
+DISH_KEYS = {"order_id", "dish_id", "base_price"}
 
 
 def _check_ids(name, arr):
@@ -141,6 +145,7 @@ def _validate_gather(b, tuning):
 
 
 def _validate_quan(b, tuning):
+    t = tuning["quan"]
     for arr in ("stoves", "tables", "customers"):
         if arr in b:
             _check_ids(arr, b[arr])
@@ -149,15 +154,103 @@ def _validate_quan(b, tuning):
     p = b.get("player", {})
     if not isinstance(p, dict) or set(p) - QUAN_PLAYER_KEYS:
         raise BadInput("quan.player chỉ có pos và vel")
-    qb = tuning["quan"]["bounds"]
+    qb = t["bounds"]
     if "pos" in p:
         _pos("player.pos", p["pos"], qb, axes=("x", "z"))
     if "vel" in p and not (isinstance(p["vel"], list) and len(p["vel"]) == 2 and all(_num(c) for c in p["vel"])):
         raise BadInput("player.vel phải là [x, z]")
     table_ids = [c.get("table_id") for c in b.get("customers", [])]
-    known = {t["id"] for t in tuning["quan"]["tables"]} | {t.get("id") for t in b.get("tables", [])}
+    known = {table["id"] for table in t["tables"]}
     for c in b.get("customers", []):
         if not isinstance(c.get("table_id"), str) or c["table_id"] not in known:
             raise BadInput(f"customers.{c['id']}: table_id phải là bàn có thật")
     if len(table_ids) != len(set(table_ids)):
         raise BadInput("hai khách cùng bàn")
+    if not isinstance(b.get("random_customers", True), bool):
+        raise BadInput("random_customers phải là boolean")
+    reputation = b.get("reputation", t["reputation_initial"])
+    if not _num(reputation) or not t["reputation_min"] <= reputation <= t["reputation_max"]:
+        raise BadInput("reputation nằm ngoài miền uy tín")
+
+    customers = prepare_quan_customers(b, tuning, b.get("stock"))
+    dishes = [b["hand"]] if b.get("hand") is not None else []
+    stove_keys = {"id", "pos", "state", "dish", "cook_ticks_left", "ready_ticks"}
+    for kind, keys in (("tables", {"id", "pos"}), ("stoves", stove_keys)):
+        known_ids = {entity["id"] for entity in t[kind]}
+        for entity in b.get(kind, []):
+            if entity["id"] not in known_ids or entity.keys() - keys:
+                raise BadInput(f"{kind}.{entity['id']}: id hoặc trường không hợp lệ")
+            if "pos" in entity:
+                _pos(f"{kind}.{entity['id']}.pos", entity["pos"], qb, axes=("x", "z"))
+    for stove in b.get("stoves", []):
+        dish = _stove_fixture_dish(stove)
+        if dish is not None:
+            dishes.append(dish)
+    _validate_quan_dishes(customers, dishes)
+
+
+def prepare_quan_customers(scenario, tuning, stock):
+    """Dựng khách theo mục D. Kho file chỉ có sau khi CLI đã đọc scenario."""
+    patience = round(tuning["quan"]["patience_s"] * tuning["tick_hz"])
+    menu = tuning["menu"]
+    customers = []
+    for fixture in scenario.get("customers", []):
+        label = f"customers.{fixture['id']}"
+        if fixture.keys() - CUSTOMER_KEYS:
+            raise BadInput(f"{label}: trường không hỗ trợ")
+        customer = dict({"dish_id": None, "order_tick": 0, "state": "waiting",
+                         "patience_ticks_left": patience, "eat_ticks_left": 0,
+                         "order_status": "reserved", "base_price": 0, "tip": 0}, **fixture)
+        for key in ("order_tick", "patience_ticks_left", "eat_ticks_left", "base_price", "tip"):
+            _nonneg_int(f"{label}.{key}", customer[key])
+        state, status, dish = customer["state"], customer["order_status"], customer["dish_id"]
+        if state not in ("waiting", "eating") or status not in ("reserved", "assigned", "unfulfillable", "served"):
+            raise BadInput(f"{label}: trạng thái khách hoặc đơn không hợp lệ")
+        if not (isinstance(dish, str) and dish in menu) and not (dish is None and status == "unfulfillable"):
+            raise BadInput(f"{label}: món không hợp lệ")
+        if state == "eating":
+            if status != "served" or customer["eat_ticks_left"] == 0 or not customer["base_price"] or "tip" not in fixture:
+                raise BadInput(f"{label}: khách đang ăn cần đơn served, timer, base_price và tip")
+        elif status == "served" or customer["eat_ticks_left"]:
+            raise BadInput(f"{label}: khách đang chờ không thể có đơn served hoặc timer ăn")
+
+        expected = menu[dish]["recipe"] if status == "reserved" else {}
+        if "reserved" in fixture and validate_items(fixture["reserved"]) != expected:
+            raise BadInput(f"{label}: giữ chỗ không khớp công thức hoặc trạng thái đơn")
+        customer["reserved"] = dict(expected)
+        customers.append(customer)
+
+    if stock is not None:
+        held = Counter()
+        for customer in sorted(customers, key=lambda c: (c["order_tick"], id_key(c["table_id"]))):
+            held.update(customer["reserved"])
+            if any(amount > stock.get(kind, 0) for kind, amount in held.items()):
+                raise BadInput(f"customers.{customer['id']}: nguyên liệu giữ chỗ vượt tồn kho")
+    return customers
+
+
+def _stove_fixture_dish(stove):
+    state, dish = stove.get("state", "idle"), stove.get("dish")
+    cook, ready = stove.get("cook_ticks_left", 0), stove.get("ready_ticks", 0)
+    _nonneg_int("stove.cook_ticks_left", cook)
+    _nonneg_int("stove.ready_ticks", ready)
+    if state not in ("idle", "cooking", "ready") or (state == "idle") != (dish is None):
+        raise BadInput("bếp có trạng thái hoặc món không hợp lệ")
+    if (state == "cooking") != (cook > 0) or (state != "ready" and ready):
+        raise BadInput("bếp có bộ đếm mâu thuẫn với trạng thái")
+    return dish
+
+
+def _validate_quan_dishes(customers, dishes):
+    assigned = {c["id"]: c for c in customers if c["order_status"] == "assigned"}
+    for dish in dishes:
+        if not isinstance(dish, dict) or dish.keys() != DISH_KEYS or not isinstance(dish["order_id"], str):
+            raise BadInput("payload món phải có order_id, dish_id và base_price")
+        customer = assigned.pop(dish["order_id"], None)
+        if customer is None or dish["dish_id"] != customer["dish_id"]:
+            raise BadInput("món trùng hoặc không khớp đơn assigned")
+        _nonneg_int("dish.base_price", dish["base_price"])
+        if dish["base_price"] == 0:
+            raise BadInput("dish.base_price phải dương")
+    if assigned:
+        raise BadInput("đơn assigned phải có đúng một món trên bếp hoặc tay")
