@@ -1,9 +1,4 @@
-"""Buổi tối — Mở Quán. KHUNG: đi lại, chặn biên, đồng hồ, kho nạp từ file/scenario.
-
-Nhóm viết tiếp (PRD-0 mục F, Quán):
-  TODO(nhóm, lát 4): interact tại bếp/bàn (cook_started, dish_ready, dish_picked, served),
-                     ăn xong trả tiền (paid), boa, uy tín, hết ca (quan_end).
-"""
+"""Buổi tối — Mở Quán. Đầy đủ vòng đời khách, giữ chỗ, bếp, bưng/phục vụ, thanh toán/boa/uy tín và kết ca (PRD-0 mục F)."""
 
 import math
 
@@ -79,22 +74,24 @@ class QuanSim:
         self.phase_tick += 1
         self.time_left_ticks = max(0, self.time_left_ticks - 1)
         self._tick_customer_patience()
-        self._step_stoves(events)
+        self._step_stoves_and_eat_timers(events)
         self._move(inp)
         if inp.pressed("interact"):
             self._handle_interact(events)
+        self._settle_finished_eating(events)
         if self.time_left_ticks > 0:
             self._remove_expired_customers(events)
             self._spawn_customer_if_due(events)
         if self.time_left_ticks <= 0:
+            self._settle_closing(events)
             self.done = True
             self.reason = "time"
             events.append(("quan_end", {"reason": "time", "money": self.money, "earned": self.earned,
                                         "shift_earned": self.shift_earned, "reputation": self.reputation}))
         return events
 
-    # --- Slice 4: bếp, bưng món, phục vụ & ưu tiên interact --------------------
-    def _step_stoves(self, events):
+    # --- Slice 4: bếp, bưng món, phục vụ, thanh toán/boa/uy tín & hết ca ------
+    def _step_stoves_and_eat_timers(self, events):
         for stove in sort_by_id(self.stoves):
             if stove["state"] == "ready":
                 stove["ready_ticks"] = stove.get("ready_ticks", 0) + 1
@@ -109,6 +106,9 @@ class QuanSim:
                         "order_id": dish["order_id"],
                         "dish_id": dish["dish_id"],
                     }))
+        for customer in self.customers:
+            if customer["state"] == "eating":
+                customer["eat_ticks_left"] = max(0, customer["eat_ticks_left"] - 1)
 
     def _handle_interact(self, events):
         radius = self.t["interact_radius"]
@@ -219,6 +219,51 @@ class QuanSim:
             "tip": tip,
         }))
         return True
+
+    def _complete_payment(self, customer, reason: str, events):
+        base_price = customer["base_price"]
+        tip = customer["tip"]
+        amount = base_price + tip
+        self.money += amount
+        self.earned += amount
+        self.shift_earned += amount
+        if tip > 0:
+            self.reputation = min(
+                self.t["reputation_max"],
+                max(self.t["reputation_min"], self.reputation + self.t["tip_reputation"]),
+            )
+        events.append(("paid", {
+            "order_id": customer["id"],
+            "table_id": customer["table_id"],
+            "base_price": base_price,
+            "tip": tip,
+            "amount": amount,
+            "reason": reason,
+        }))
+
+    def _settle_finished_eating(self, events):
+        leaving_ids = set()
+        for customer in sort_by_id(self.customers, key=lambda c: c["table_id"]):
+            if customer["state"] == "eating" and customer["eat_ticks_left"] <= 0:
+                self._complete_payment(customer, "finished_eating", events)
+                leaving_ids.add(customer["id"])
+        if leaving_ids:
+            self.customers = [c for c in self.customers if c["id"] not in leaving_ids]
+
+    def _settle_closing(self, events):
+        for customer in sort_by_id(self.customers, key=lambda c: c["table_id"]):
+            if customer["state"] == "eating":
+                self._complete_payment(customer, "closing", events)
+            else:
+                customer["reserved"] = {}
+                self._discard_order_dish(customer["id"])
+                events.append(("customer_left", {
+                    "order_id": customer["id"],
+                    "table_id": customer["table_id"],
+                    "reason": "closing",
+                    "reputation": self.reputation,
+                }))
+        self.customers = []
 
     def _tick_customer_patience(self):
         for customer in self.customers:
