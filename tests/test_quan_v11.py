@@ -13,6 +13,7 @@ from chonoi.rng import Streams
 from chonoi.scenario import load_scenario
 from chonoi.sim.quan import QuanSim
 from tests.helpers import ROOT, Workdir, events, read_jsonl, write_json
+from tests.test_quan_freshness_v12 import contract_items, reservation_counts
 
 
 CONTRACT = json.loads((Path(ROOT) / "game.contract.json").read_text(encoding="utf-8"))
@@ -48,6 +49,10 @@ class QuanV11Test(unittest.TestCase):
         self.tuning = quan_tuning()
 
     def sim(self, scenario, **kwargs):
+        if "stock" in scenario:
+            scenario = dict(scenario, stock=contract_items(scenario["stock"]))
+        if "inventory" in kwargs:
+            kwargs["inventory"] = contract_items(kwargs["inventory"])
         return QuanSim(self.tuning, scenario, Streams(1), IdAllocator(), **kwargs)
 
     def step_for(self, sim, count):
@@ -92,9 +97,10 @@ class QuanV11Test(unittest.TestCase):
             name, payload = sim.step(INTERACT)[0]
             self.assertEqual((name, payload["stove_id"], payload["dish_id"]),
                              ("cook_started", stove["id"], dishes[index]))
-            self.assertEqual(payload["base_price"], self.tuning["menu"][dishes[index]]["price"])
+            listed = self.tuning["menu"][dishes[index]]["price"]
+            self.assertEqual(payload["base_price"], listed - (CONTRACT["contract_version"] == "1.2"))
         self.assertEqual([s["state"] for s in sim.stoves], ["cooking", "cooking"])
-        self.assertEqual(sim.snapshot()["stock"], {})
+        self.assertEqual(sim.snapshot()["stock"], contract_items({}))
         for stove_id, dish in zip(("B1", "B2"), dishes):
             stove = next(s for s in sim.stoves if s["id"] == stove_id)
             self.assertEqual(self.step_for(sim, stove["cook_ticks_left"]), [
@@ -120,7 +126,8 @@ class QuanV11Test(unittest.TestCase):
 
     def test_standalone_can_order_new_dish_and_accept_new_ingredients(self):
         scenario = {"stock": {"ca_keo": 2}, "customers": []}
-        self.assertEqual(self.read_scenario("quan", {"quan": scenario}), scenario)
+        loaded = dict(scenario, stock=contract_items(scenario["stock"]))
+        self.assertEqual(self.read_scenario("quan", {"quan": loaded}), loaded)
         sim = self.sim(scenario)
         name, data = self.step_for(sim, self.tuning["quan"]["first_customer_tick"])[0]
         self.assertEqual((name, data["dish_id"]), ("customer_arrived", "ca_keo_nuong"))
@@ -132,7 +139,7 @@ class QuanV11Test(unittest.TestCase):
         with self.assertRaises(BadInput):
             self.sim(fixture, inventory={"ca_loc": 1}, allowed_dishes={GOI: 1})
         sim = self.sim(fixture, inventory={"ca_loc": 1}, allowed_dishes={CA_LOC: 1})
-        self.assertEqual(sim.customers[0]["reserved"], {"ca_loc": 1})
+        self.assertEqual(reservation_counts(sim.customers[0]["reserved"], sim.snapshot()["stock"]), {"ca_loc": 1})
 
     def test_day_plan_validation_and_forbidden_quan_fields(self):
         override = {"day": {"day_plan": {"1": {"dishes": {"ca_keo_nuong": 2}}}}}
@@ -162,7 +169,7 @@ class QuanV11Test(unittest.TestCase):
         cli = [sys.executable, "-m", "chonoi.headless"]
         with Workdir() as work:
             out = work.path("out.jsonl")
-            stock = write_json(work.path("stock.json"), {"items": {"ca_keo": 2}})
+            stock = write_json(work.path("stock.json"), {"items": contract_items({"ca_keo": 2})})
             args = ["--seed", "1", "--ticks", "120", "--out", out]
             run = subprocess.run([*cli, "--mode", "quan", "--inventory", stock, *args],
                                  cwd=ROOT, capture_output=True)

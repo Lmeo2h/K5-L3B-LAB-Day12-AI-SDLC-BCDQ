@@ -8,8 +8,8 @@ import json
 from collections import Counter
 
 from .errors import BadInput
-from .ids import id_key
-from .inventory import KINDS_P2, validate_items
+from .ids import id_key, sort_by_id
+from .inventory import KINDS_P2, _current_contract_version, fresh_to_units, validate_items, validate_items_v12
 
 GATHER_KEYS = {"player", "hold", "nodes", "fish", "monsters", "random_fish", "time_left_ticks"}
 GATHER_PLAYER_KEYS = {"pos", "vel", "heading_deg", "hp", "oxygen_ticks", "zero_oxy_ticks",
@@ -170,9 +170,7 @@ def _validate_gather(b, tuning):
     if "random_fish" in b and not isinstance(b["random_fish"], bool):
         raise BadInput("random_fish phải là boolean")
     if "hold" in b:
-        h = b["hold"]
-        if not isinstance(h, list) or any(k not in KINDS_P2 for k in h):
-            raise BadInput("hold phải là mảng id nguyên liệu hợp lệ")
+        h = validate_items_v12(b["hold"], kinds=KINDS_P2)
         if len(h) > g["hold_capacity"]:
             raise BadInput("hold vượt sức chứa")
     p = b.get("player", {})
@@ -288,7 +286,9 @@ def _validate_quan(b, tuning):
         if arr in b:
             _check_ids(arr, b[arr])
     if "stock" in b:
-        validate_items(b["stock"], kinds=_quan_ingredient_kinds(tuning["menu"]))
+        stock = prepare_quan_stock(b["stock"], tuning)
+    else:
+        stock = None
     p = b.get("player", {})
     if not isinstance(p, dict) or set(p) - QUAN_PLAYER_KEYS:
         raise BadInput("quan.player chỉ có pos và vel")
@@ -308,7 +308,7 @@ def _validate_quan(b, tuning):
         raise BadInput("random_customers phải là boolean")
     _validate_quan_reputation(b.get("reputation", t["reputation_initial"]), t, "quan.reputation")
 
-    customers = prepare_quan_customers(b, tuning, b.get("stock"))
+    customers = prepare_quan_customers(b, tuning, stock)
     dishes = [b["hand"]] if b.get("hand") is not None else []
     stove_keys = {"id", "pos", "state", "dish", "cook_ticks_left", "ready_ticks"}
     for kind, keys in (("tables", {"id", "pos"}), ("stoves", stove_keys)):
@@ -322,7 +322,8 @@ def _validate_quan(b, tuning):
         dish = _stove_fixture_dish(stove)
         if dish is not None:
             dishes.append(dish)
-    _validate_quan_dishes(customers, dishes)
+    freshness = tuning.get("freshness") if quan_uses_items(tuning, stock, b) else None
+    _validate_quan_dishes(customers, dishes, tuning["menu"], freshness)
 
 
 def _validate_quan_reputation(value, t, field):
@@ -334,13 +335,57 @@ def _quan_ingredient_kinds(menu):
     return set(KINDS_P2).union(*(dish["recipe"] for dish in menu.values()))
 
 
+def quan_uses_items(tuning, stock=None, scenario=None):
+    if "freshness" not in tuning:
+        return False
+    if isinstance(stock, list):
+        return True
+    version = tuning.get("contract_version") or _current_contract_version()
+    if stock is None and scenario is not None:
+        if any(isinstance(customer.get("reserved"), list) for customer in scenario.get("customers", [])):
+            return True
+    return version == "1.2"
+
+
+def prepare_quan_stock(stock, tuning):
+    if not quan_uses_items(tuning, stock):
+        return validate_items(stock, kinds=_quan_ingredient_kinds(tuning["menu"]))
+    items = validate_items_v12(stock)
+    threshold = tuning["freshness"]["spoiled_below"]
+    threshold_units = fresh_to_units(threshold)
+    result = []
+    for item in items:
+        units = fresh_to_units(item["fresh"])
+        if item["fresh"] < threshold:
+            units = min(units, threshold_units - 1)
+        result.append(dict(item, _units=units))
+    return sort_by_id(result)
+
+
+def select_quan_items(stock, held, recipe, spoiled_below):
+    """Return a full reservation, or None without claiming any item."""
+    remaining = dict(recipe)
+    chosen = []
+    candidates = sorted(stock, key=lambda item: (-item["_units"], id_key(item["id"])))
+    for item in candidates:
+        kind = item["kind"]
+        if item["_units"] >= spoiled_below and item["id"] not in held and remaining.get(kind, 0):
+            chosen.append(item)
+            remaining[kind] -= 1
+    if any(remaining.values()):
+        return None
+    return [item["id"] for item in sort_by_id(chosen)]
+
+
 def prepare_quan_customers(scenario, tuning, stock, *, menu=None):
     """Dựng khách theo mục D. Kho file chỉ có sau khi CLI đã đọc scenario."""
     patience = round(tuning["quan"]["patience_s"] * tuning["tick_hz"])
     full_menu = tuning["menu"]
     menu = full_menu if menu is None else menu
     kinds = _quan_ingredient_kinds(full_menu)
+    fresh = quan_uses_items(tuning, stock, scenario)
     customers = []
+    claimed = set()
     for fixture in scenario.get("customers", []):
         label = f"customers.{fixture['id']}"
         if fixture.keys() - CUSTOMER_KEYS:
@@ -356,24 +401,66 @@ def prepare_quan_customers(scenario, tuning, stock, *, menu=None):
         if not (isinstance(dish, str) and dish in menu) and not (dish is None and status == "unfulfillable"):
             raise BadInput(f"{label}: món không hợp lệ")
         if state == "eating":
-            if status != "served" or customer["eat_ticks_left"] == 0 or not customer["base_price"] or "tip" not in fixture:
+            if (status != "served" or customer["eat_ticks_left"] == 0
+                    or not {"base_price", "tip"} <= fixture.keys()
+                    or (not fresh and not customer["base_price"])):
                 raise BadInput(f"{label}: khách đang ăn cần đơn served, timer, base_price và tip")
         elif status == "served" or customer["eat_ticks_left"]:
             raise BadInput(f"{label}: khách đang chờ không thể có đơn served hoặc timer ăn")
+        if fresh and status in ("assigned", "served") and "base_price" in fixture:
+            _validate_fresh_price(customer["base_price"], menu[dish]["price"], tuning["freshness"])
 
         expected = menu[dish]["recipe"] if status == "reserved" else {}
-        if "reserved" in fixture and validate_items(fixture["reserved"], kinds=kinds) != expected:
-            raise BadInput(f"{label}: giữ chỗ không khớp công thức hoặc trạng thái đơn")
-        customer["reserved"] = dict(expected)
+        if fresh:
+            if "reserved" in fixture:
+                reserved = fixture["reserved"]
+                if (not isinstance(reserved, list) or any(not isinstance(i, str) or not i for i in reserved)
+                        or len(set(reserved)) != len(reserved) or (status != "reserved" and reserved)
+                        or not claimed.isdisjoint(reserved)):
+                    raise BadInput(f"{label}: reserved phải là mảng ID duy nhất khớp trạng thái đơn")
+                customer["reserved"] = sorted(reserved, key=id_key)
+                claimed.update(reserved)
+            else:
+                customer["reserved"] = None if status == "reserved" else []
+        else:
+            if "reserved" in fixture and validate_items(fixture["reserved"], kinds=kinds) != expected:
+                raise BadInput(f"{label}: giữ chỗ không khớp công thức hoặc trạng thái đơn")
+            customer["reserved"] = dict(expected)
         customers.append(customer)
 
-    if stock is not None:
+    if stock is not None and fresh:
+        _reserve_quan_fixture_items(customers, stock, menu, tuning["freshness"])
+    elif stock is not None:
         held = Counter()
         for customer in sorted(customers, key=lambda c: (c["order_tick"], id_key(c["table_id"]))):
             held.update(customer["reserved"])
             if any(amount > stock.get(kind, 0) for kind, amount in held.items()):
                 raise BadInput(f"customers.{customer['id']}: nguyên liệu giữ chỗ vượt tồn kho")
     return customers
+
+
+def _reserve_quan_fixture_items(customers, stock, menu, freshness):
+    threshold = fresh_to_units(freshness["spoiled_below"])
+    by_id = {item["id"]: item for item in stock}
+    held = set()
+    orders = [c for c in customers if c["order_status"] == "reserved"]
+    for customer in orders:
+        reserved = customer["reserved"]
+        if reserved is None:
+            continue
+        recipe = menu[customer["dish_id"]]["recipe"]
+        if (any(i in held or i not in by_id or by_id[i]["_units"] < threshold for i in reserved)
+                or Counter(by_id[i]["kind"] for i in reserved) != recipe):
+            raise BadInput(f"customers.{customer['id']}: ID giữ chỗ vắng, ươn, trùng hoặc sai công thức")
+        held.update(reserved)
+    for customer in sorted(orders, key=lambda c: (c["order_tick"], id_key(c["table_id"]))):
+        if customer["reserved"] is not None:
+            continue
+        reserved = select_quan_items(stock, held, menu[customer["dish_id"]]["recipe"], threshold)
+        if reserved is None:
+            raise BadInput(f"customers.{customer['id']}: nguyên liệu giữ chỗ vượt tồn kho khả dụng")
+        customer["reserved"] = reserved
+        held.update(reserved)
 
 
 def _stove_fixture_dish(stove):
@@ -388,7 +475,13 @@ def _stove_fixture_dish(stove):
     return dish
 
 
-def _validate_quan_dishes(customers, dishes):
+def _validate_fresh_price(price, listed, freshness):
+    minimum = int(listed * freshness["spoiled_below"] / freshness["initial"])
+    if not minimum <= price <= listed:
+        raise BadInput("base_price ngoài miền giá theo độ tươi")
+
+
+def _validate_quan_dishes(customers, dishes, menu, freshness):
     assigned = {c["id"]: c for c in customers if c["order_status"] == "assigned"}
     for dish in dishes:
         if not isinstance(dish, dict) or dish.keys() != DISH_KEYS or not isinstance(dish["order_id"], str):
@@ -397,7 +490,11 @@ def _validate_quan_dishes(customers, dishes):
         if customer is None or dish["dish_id"] != customer["dish_id"]:
             raise BadInput("món trùng hoặc không khớp đơn assigned")
         _nonneg_int("dish.base_price", dish["base_price"])
-        if dish["base_price"] == 0:
+        if freshness is not None:
+            _validate_fresh_price(dish["base_price"], menu[dish["dish_id"]]["price"], freshness)
+            if customer["base_price"] not in (0, dish["base_price"]):
+                raise BadInput("dish.base_price không khớp giá đã chốt của khách")
+        elif dish["base_price"] == 0:
             raise BadInput("dish.base_price phải dương")
     if assigned:
         raise BadInput("đơn assigned phải có đúng một món trên bếp hoặc tay")

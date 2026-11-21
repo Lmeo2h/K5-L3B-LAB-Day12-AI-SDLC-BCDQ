@@ -12,12 +12,19 @@ from .shop import ShopSim
 class DaySim:
     mode = "day"
 
-    def __init__(self, tuning, scenario, streams, ids, days=1):
+    def __init__(self, tuning, scenario, streams, ids, days=1, item_ids=None):
         self.tuning = tuning
         self.scenario = scenario or {}
         day_cfg = self.scenario.get("day", {})
         self.rng = streams
         self.ids = ids
+        self.item_ids = item_ids if item_ids is not None else IdAllocator()
+        for item in self.scenario.get("gather", {}).get("hold", []):
+            if isinstance(item, dict) and "id" in item:
+                self.item_ids.reserve(item["id"])
+        for item in self.scenario.get("quan", {}).get("stock", []):
+            if isinstance(item, dict) and "id" in item:
+                self.item_ids.reserve(item["id"])
         self.days = days
         self.day = 1
         self.days_completed = 0
@@ -112,30 +119,47 @@ class DaySim:
                     t["gather"]["hp_max"] = tier["hp_max"]
         return t
 
+    def _reassign_hold_ids(self, hold: list) -> list:
+        """Cấp ID mới tuần tự cho mẫu `hold` ở Ngày 2+ mà vẫn giữ kind/fresh ban đầu."""
+        out = []
+        for item in hold:
+            if isinstance(item, dict):
+                cloned = {"id": self.item_ids.new("I"), "kind": item["kind"], "fresh": item["fresh"]}
+                out.append(cloned)
+            else:
+                out.append(item)
+        return out
+
     def _start_gather(self):
         self.phase = "gather"
         t = self._upgraded_gather_tuning()
         sc = copy.deepcopy(self.scenario.get("gather", {})) if self.day == 1 else {}
-        if self.day > 1:
-            sc.pop("hold", None)
+        if self.day > 1 and sc.get("hold"):
+            sc["hold"] = self._reassign_hold_ids(sc["hold"])
         kwargs = {}
-        if "day" in inspect.signature(GatherSim.__init__).parameters:
+        params = inspect.signature(GatherSim.__init__).parameters
+        if "day" in params:
             kwargs["day"] = self.day
+        if "item_ids" in params:
+            kwargs["item_ids"] = self.item_ids
         sim = GatherSim(t, sc, self.rng, IdAllocator(), **kwargs)
         sim.money = self.money
         sim.earned = self.earned
         sim.reputation = self.reputation
         return sim
 
-    def _start_quan(self, inventory: dict):
+    def _start_quan(self, inventory):
         self.phase = "quan"
         sc = copy.deepcopy(self.scenario.get("quan", {})) if self.day == 1 else {}
         sc.pop("stock", None)
         sc.pop("reputation", None)
         kwargs = {"inventory": inventory}
-        if "allowed_dishes" in inspect.signature(QuanSim.__init__).parameters:
+        params = inspect.signature(QuanSim.__init__).parameters
+        if "allowed_dishes" in params:
             dishes = self.day_plan.get("dishes", {})
             kwargs["allowed_dishes"] = list(dishes.keys()) if isinstance(dishes, dict) else list(dishes)
+        if "item_ids" in params:
+            kwargs["item_ids"] = self.item_ids
         sim = QuanSim(self.tuning, sc, self.rng, IdAllocator(), **kwargs)
         sim.money = self.money
         sim.earned = self.earned
@@ -186,11 +210,20 @@ class DaySim:
             return events
 
         if old_phase == "gather":
-            inv = {} if self.sub.reason == "fainted" else self.sub.inventory_items()
+            if self.sub.reason == "fainted":
+                inv = [] if (self.tuning.get("contract_version") == "1.2" or isinstance(self.sub.inventory_items(), list)) else {}
+            else:
+                inv = self.sub.inventory_items()
             self.sub = self._start_quan(inv)
             events.append((self.day, "quan", "phase_start", {}))
         elif old_phase == "quan":
-            leftover = {k: v for k, v in self.sub.stock.items() if v > 0}
+            if isinstance(self.sub.stock, list):
+                leftover = [
+                    {"id": it["id"], "kind": it["kind"], "fresh": it["fresh"]}
+                    for it in self.sub.stock
+                ]
+            else:
+                leftover = {k: v for k, v in self.sub.stock.items() if v > 0}
             self.sub = self._start_shop(leftover)
             events.append((self.day, "shop", "phase_start", {}))
         elif old_phase == "shop":

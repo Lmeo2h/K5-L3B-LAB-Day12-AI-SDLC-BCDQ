@@ -222,7 +222,7 @@ class GatherFishV11Tests(unittest.TestCase):
         # Nếu bơi trước thì F1 chạy ra 22.025 (> catch_radius 2.0); theo mục 4.5 catch chạy trước bơi -> bắt được!
         ev = sim.step(_idle_inp(catch=True))
         self.assertEqual([n for n, _ in ev], ["fish_caught", "gather_end"])
-        self.assertEqual(sim.hold, ["ca_keo", "ca_keo"])
+        self.assertEqual([it["kind"] for it in sim.hold], ["ca_keo", "ca_keo"])
         self.assertEqual(sim.fish, [])
 
 
@@ -236,13 +236,16 @@ class ChokeOnZeroV11Tests(unittest.TestCase):
                 "hp": 2,
                 "invuln_ticks": 90,
             },
-            "hold": ["ca_loc", "keo_neo"],
+            "hold": [
+                {"id": "I1", "kind": "ca_loc", "fresh": 100},
+                {"id": "I2", "kind": "keo_neo", "fresh": 100},
+            ],
         })
         # Bước vừa chạm 0: phát oxygen_empty VÀ choke (xuyên invuln_ticks, không rơi hold)
         ev1 = sim.step(_idle_inp())
         self.assertEqual([n for n, _ in ev1], ["oxygen_empty", "choke"])
         self.assertEqual(sim.hp, 1)
-        self.assertEqual(sim.hold, ["ca_loc", "keo_neo"])
+        self.assertEqual([it["kind"] for it in sim.hold], ["ca_loc", "keo_neo"])
         self.assertEqual(sim.zero_oxy_ticks, 0)
 
         # Chạy 59 bước -> chưa choke
@@ -256,7 +259,7 @@ class ChokeOnZeroV11Tests(unittest.TestCase):
         faint_data = dict(ev60)["faint"]
         self.assertEqual(faint_data["cause"], "oxygen")
         self.assertEqual(faint_data["hp"], 0)
-        self.assertEqual(faint_data["lost"], ["keo_neo", "ca_loc"])
+        self.assertEqual([(it["id"], it["kind"]) for it in faint_data["lost"]], [("I2", "keo_neo"), ("I1", "ca_loc")])
         self.assertEqual(sim.hold, [])
         self.assertEqual(dict(ev60)["gather_end"]["reason"], "fainted")
 
