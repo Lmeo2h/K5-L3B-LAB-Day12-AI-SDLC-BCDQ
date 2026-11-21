@@ -10,10 +10,10 @@
 
 ## Cấu trúc & quy ước
 - (Starter Python là TÙY CHỌN; nhóm có thể dùng ngôn ngữ khác nếu giữ Test Contract.) Khung do giảng viên cấp: `chonoi/{headless,inputs,scenario,contract,rng,ids,jsonl,inventory,runner,live}.py` và `chonoi/web/`. Hạn chế sửa; nếu phải sửa thì báo cả nhóm và ghi lại lý do.
-- Luật chơi của nhóm: `chonoi/sim/{gather,monsters,quan,day,shop}.py` (Test Contract `v1.1`).
+- Luật chơi của nhóm: `chonoi/sim/{gather,monsters,quan,day,shop}.py` (Test Contract `v1.2`, xem `CHANGELOG.md` cho thay đổi schema kho cá thể và `FRESH_SCALE=240`).
 - **Số liệu chỉ đọc từ `game.contract.json` / dữ liệu**, không hard-code trong luật.
 - Mọi số ngẫu nhiên đi qua `Streams` (`chonoi/rng.py`); không dùng `random` toàn cục, không dùng đồng hồ hệ thống.
-- Sắp danh sách thực thể bằng `ids.sort_by_id`; cấp id bằng `IdAllocator`.
+- Sắp danh sách thực thể bằng `ids.sort_by_id`; cấp id bằng `IdAllocator` (`I1, I2, ...` liên tục xuyên pha/Ngày).
 
 ## Nên tránh
 - Không sửa `docs/contracts/`, `game.contract.json` (khóa contract) hoặc schema kho khi chưa báo cả nhóm (đổi hợp đồng ảnh hưởng mọi module).
