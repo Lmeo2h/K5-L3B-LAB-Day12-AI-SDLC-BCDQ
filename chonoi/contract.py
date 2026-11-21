@@ -22,7 +22,7 @@ def _between(name, v, lo, hi):
         raise BadInput(f"tuning.{name} phải trong [{lo}, {hi}], đang là {v!r}")
 
 
-SUPPORTED_VERSIONS = ("1.1", "1.2")
+SUPPORTED_VERSIONS = ("1.1", "1.2", "1.3")
 
 
 def load_contract(path=DEFAULT_PATH) -> dict:
@@ -34,6 +34,11 @@ def load_contract(path=DEFAULT_PATH) -> dict:
     ver = c.get("contract_version")
     if ver not in SUPPORTED_VERSIONS:
         raise BadInput(f"contract_version phải là một trong {SUPPORTED_VERSIONS}, đang là {ver!r}")
+    if ver == "1.3":
+        for key in ("bench_cmd", "soak_cmd"):
+            val = c.get(key)
+            if not isinstance(val, str) or not val.strip():
+                raise BadInput(f"{key} phải là chuỗi khác rỗng cho contract_version 1.3")
     validate_tuning(c.get("tuning"), contract_version=ver)
     return c
 
@@ -320,7 +325,7 @@ def validate_tuning(t, contract_version="1.1"):
     g, q, menu = t.get("gather"), t.get("quan"), t.get("menu")
     if not isinstance(g, dict) or not isinstance(q, dict) or not isinstance(menu, dict):
         raise BadInput("tuning phải có gather, quan, menu")
-    if contract_version == "1.2" or "freshness" in t:
+    if contract_version in ("1.2", "1.3") or "freshness" in t:
         _validate_freshness(t.get("freshness"))
     _validate_gather(g)
     _validate_quan_and_menu(q, menu)
