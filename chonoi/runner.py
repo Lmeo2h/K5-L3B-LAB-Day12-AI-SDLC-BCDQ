@@ -8,6 +8,8 @@ cả hai chạy CÙNG một lớp sim, không nhân đôi logic.
 """
 
 import math
+import os
+import tempfile
 
 from .ids import IdAllocator
 from .inputs import InputPlayer
@@ -127,7 +129,10 @@ class Session:
 def run(mode, tuning, scenario, seed, frames, ticks, out_path, snapshot_every, inventory=None, inventory_out=None, days=1):
     sess = Session(mode, tuning, scenario, seed, inventory, days=days)
     player = InputPlayer(frames)
-    w = JsonlWriter(out_path)
+    out_dir = os.path.dirname(os.path.abspath(out_path))
+    fd, tmp_path = tempfile.mkstemp(prefix=".out-", suffix=".tmp", dir=out_dir)
+    os.close(fd)
+    w = JsonlWriter(tmp_path)
     try:
         w.write(sess.snapshot())  # tick 0: sau khi dựng scenario, trước mọi input
         last_snapped = 0
@@ -141,7 +146,12 @@ def run(mode, tuning, scenario, seed, frames, ticks, out_path, snapshot_every, i
         if last_snapped != sess.tick:
             w.write(sess.snapshot())
         w.write(sess.end_row())
-    finally:
         w.close()
+        os.replace(tmp_path, out_path)
+    except BaseException:
+        w.close()
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise
     sess.write_inventory_if_done(inventory_out)
     return sess.sim
