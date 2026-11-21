@@ -190,7 +190,7 @@ def step_monsters(sim, events: list) -> bool:
     target = min(candidates, key=lambda m: (math.dist(m["pos"], sim.pos), id_key(m["id"])))
     sim.hp = max(0, sim.hp - 1)
     drop_n = math.floor(len(sim.hold) * float(cfg.get("loss_ratio", 0.5)))
-    lost = [sim._pop_hold() for _ in range(drop_n)]
+    lost = [_clean_item(sim._pop_hold()) for _ in range(drop_n)]
     sim.invuln_ticks = int(cfg["invuln_ticks"])
     events.append((
         "monster_hit",
@@ -209,7 +209,7 @@ def step_monsters(sim, events: list) -> bool:
         sim.hp = 0
         faint_lost = []
         while sim.hold:
-            faint_lost.append(sim._pop_hold())
+            faint_lost.append(_clean_item(sim._pop_hold()))
         events.append((
             "faint",
             {"cause": "monster", "lost": faint_lost, "hp": 0, "pos": list(sim.pos)},
@@ -217,3 +217,11 @@ def step_monsters(sim, events: list) -> bool:
         sim._finish("fainted", events)
         return True
     return False
+
+
+def _clean_item(item):
+    """Chuẩn hóa cá thể sạch `{id, kind, fresh}` (bỏ `_units` nội bộ nếu có)."""
+    if isinstance(item, dict):
+        fresh = round(item["_units"] / 240.0, 6) if "_units" in item else item["fresh"]
+        return {"id": item["id"], "kind": item["kind"], "fresh": fresh}
+    return item
