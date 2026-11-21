@@ -1,0 +1,205 @@
+Phase 4 integration preview. Local runtime plus these peer branch revisions:
+origin/feat/p4-s1-contract-soak c39b1e9e0144d0c8d223cd320a88dd922fc001bc
+origin/feat/p4-s2-warnings-contrast ca2c5ce87a658f9f52c7065281cd60385adbda50
+origin/feat/p4-s4-package-release fd521fa3b660a16c2d22e58e17100dfd286f1384
+python -m chonoi.bench --seed 42 --duration 30 --out bench.json -> exit 0
+renderer: chrome.exe (headless Chromium canvas)
+
+{
+  "frames": 2161,
+  "measured_s": 30.01390000000596,
+  "avg_fps": 71.99997334566886,
+  "p1_low_fps": 64.7439670485204,
+  "load_ms": 863.2255859375
+}
+
+python -m chonoi.soak --seed 7 --days 10 --out soak.json -> exit 0
+
+python -m chonoi.soak --seed 7 --days 10 --out soak-repeat.json -> exit 0
+
+soak: days_completed=10, crashes=0, durations=2.774/2.764s, gameplay identical=True
+python -m unittest discover -s tests -v -> exit 0
+test_atomic_output_preserves_previous_report_on_replace_failure (test_bench_v13.BenchTests.test_atomic_output_preserves_previous_report_on_replace_failure) ... ok
+test_auto_uses_software_when_no_browser_is_installed (test_bench_v13.BenchTests.test_auto_uses_software_when_no_browser_is_installed) ... renderer: software RGB framebuffer
+ok
+test_cli_creates_valid_report_without_browser (test_bench_v13.BenchTests.test_cli_creates_valid_report_without_browser) ... ok
+test_cli_rejects_non_finite_duration_without_replacing_file (test_bench_v13.BenchTests.test_cli_rejects_non_finite_duration_without_replacing_file) ... ok
+test_uses_ceiling_and_mean_of_slowest_intervals (test_bench_v13.BenchTests.test_uses_ceiling_and_mean_of_slowest_intervals) ... ok
+test_day_loop_two_days_transitions_upgrades_and_clears_hold_stock (test_day_shop_pause.DaySimAndEnvelopeTests.test_day_loop_two_days_transitions_upgrades_and_clears_hold_stock) ... ok
+test_gather_faint_in_day_mode_transitions_to_empty_quan (test_day_shop_pause.DaySimAndEnvelopeTests.test_gather_faint_in_day_mode_transitions_to_empty_quan) ... ok
+test_cli_validation_errors_exit_2_before_writing_output (test_day_shop_pause.HeadlessDayCliTests.test_cli_validation_errors_exit_2_before_writing_output) ... ok
+test_headless_day_deterministic_22200_ticks (test_day_shop_pause.HeadlessDayCliTests.test_headless_day_deterministic_22200_ticks) ... ok
+test_pause_freezes_timers_and_ignores_actions_across_all_modes (test_day_shop_pause.PauseAcrossAllModesTests.test_pause_freezes_timers_and_ignores_actions_across_all_modes) ... ok
+test_shop_buy_oxygen_and_hp_upgrades_preserves_earned_and_score (test_day_shop_pause.ShopSimTests.test_shop_buy_oxygen_and_hp_upgrades_preserves_earned_and_score) ... ok
+test_shop_done_and_timeout_600_ticks (test_day_shop_pause.ShopSimTests.test_shop_done_and_timeout_600_ticks) ... ok
+test_harvest_and_catch_assign_ids_and_decay_only_from_next_tick (test_freshness_gather_v12.GatherFreshnessV12Tests.test_harvest_and_catch_assign_ids_and_decay_only_from_next_tick) ... ok
+test_headless_spoiled_and_inventory_out_roundtrip (test_freshness_gather_v12.GatherFreshnessV12Tests.test_headless_spoiled_and_inventory_out_roundtrip) ... ok
+test_multiple_spoiled_emitted_in_id_key_order_and_clamped_at_zero (test_freshness_gather_v12.GatherFreshnessV12Tests.test_multiple_spoiled_emitted_in_id_key_order_and_clamped_at_zero) ... ok
+test_pause_freezes_freshness_decay (test_freshness_gather_v12.GatherFreshnessV12Tests.test_pause_freezes_freshness_decay) ... ok
+test_scenario_gather_hold_v12_validation (test_freshness_gather_v12.GatherFreshnessV12Tests.test_scenario_gather_hold_v12_validation) ... ok
+test_ticket03_spoiled_threshold_tick1_and_once (test_freshness_gather_v12.GatherFreshnessV12Tests.test_ticket03_spoiled_threshold_tick1_and_once) ... ok
+test_contract_freshness_validation (test_freshness_gather_v12.InventoryAndContractV12Tests.test_contract_freshness_validation) ... ok
+test_fresh_scale_240_precision_at_threshold_30 (test_freshness_gather_v12.InventoryAndContractV12Tests.test_fresh_scale_240_precision_at_threshold_30) ... ok
+test_inventory_v12_rejects_count_dict_and_bad_items (test_freshness_gather_v12.InventoryAndContractV12Tests.test_inventory_v12_rejects_count_dict_and_bad_items) ... ok
+test_choke_on_zero_pierces_invuln_preserves_hold_and_faints_with_cause (test_gather_fish_v11.ChokeOnZeroV11Tests.test_choke_on_zero_pierces_invuln_preserves_hold_and_faints_with_cause) ... ok
+test_contract_v11_structure_and_tuning (test_gather_fish_v11.ContractAndInputsV11Tests.test_contract_v11_structure_and_tuning) ... ok
+test_inputs_v11_pause_shop_done_and_buy_string (test_gather_fish_v11.ContractAndInputsV11Tests.test_inputs_v11_pause_shop_done_and_buy_string) ... ok
+test_inventory_accepts_6_ingredients_and_rejects_unknown (test_gather_fish_v11.ContractAndInputsV11Tests.test_inventory_accepts_6_ingredients_and_rejects_unknown) ... ok
+test_catch_uses_pre_swim_position_and_no_swim_on_time_end (test_gather_fish_v11.GatherFishV11Tests.test_catch_uses_pre_swim_position_and_no_swim_on_time_end) ... ok
+test_fish_edge_and_corner_reflection (test_gather_fish_v11.GatherFishV11Tests.test_fish_edge_and_corner_reflection) ... ok
+test_fish_spawn_normalized_weights_when_species_blocked (test_gather_fish_v11.GatherFishV11Tests.test_fish_spawn_normalized_weights_when_species_blocked) ... ok
+test_fish_spawn_schedule_clearance_normalized_weights_and_cap (test_gather_fish_v11.GatherFishV11Tests.test_fish_spawn_schedule_clearance_normalized_weights_and_cap) ... ok
+test_fish_swim_120_tick_turn_before_moving (test_gather_fish_v11.GatherFishV11Tests.test_fish_swim_120_tick_turn_before_moving) ... ok
+test_initial_8_schools_distinct_positions_and_random_fish_false (test_gather_fish_v11.GatherFishV11Tests.test_initial_8_schools_distinct_positions_and_random_fish_false) ... ok
+test_headless_n5_keo_neo_and_ca_keo_plus_determinism_and_bad_age_ticks (test_gather_fish_v11.HeadlessV11IntegrationTests.test_headless_n5_keo_neo_and_ca_keo_plus_determinism_and_bad_age_ticks) ... ok
+test_headless_harvest_catch_dock_inventory_out (test_gather_harvest.GatherHarvestHeadlessTests.test_headless_harvest_catch_dock_inventory_out)
+Chạy headless từ hái nút -> bắt cá -> cập bến xuất kho đúng schema {"items": ...}. ... ok
+test_catch_fish_underwater_cooldown_and_tie_break (test_gather_harvest.GatherHarvestUnitTests.test_catch_fish_underwater_cooldown_and_tie_break)
+Bắt cá dưới nước: chọn gần nhất (hòa theo id_key F2 < F10), xóa đàn, đặt cooldown. ... ok
+test_catch_surface_miss_and_partial_hold_full (test_gather_harvest.GatherHarvestUnitTests.test_catch_surface_miss_and_partial_hold_full)
+Ở mặt nước không bắt được; miss không kích hoạt cooldown; chỗ trống < yield -> hold_full, giữ đàn & cooldown. ... ok
+test_dock_priority_over_nearby_ready_node (test_gather_harvest.GatherHarvestUnitTests.test_dock_priority_over_nearby_ready_node)
+Đứng trong cả dock_radius và interact_radius của nút ready: interact ưu tiên cập bến. ... ok
+test_gather_hold_full (test_gather_harvest.GatherHarvestUnitTests.test_gather_hold_full)
+Giỏ đầy không đủ node_yield -> phát hold_full và nút giữ nguyên ready. ... ok
+test_node_tie_break_by_id_key_and_underwater_ignored (test_gather_harvest.GatherHarvestUnitTests.test_node_tie_break_by_id_key_and_underwater_ignored)
+Hai nút cách đều -> chọn id nhỏ theo id_key (N2 trước N10); dưới nước không hái được. ... ok
+test_surface_node_harvest_and_regrow (test_gather_harvest.GatherHarvestUnitTests.test_surface_node_harvest_and_regrow)
+Hái nút ở mặt nước đúng mép bán kính, đặt regrow_ticks, và node_regrown cho phép hái lại ngay. ... ok
+test_headless_invalid_monster_exit_2_without_output (test_gather_monsters.GatherMonstersHeadlessTests.test_headless_invalid_monster_exit_2_without_output) ... ok
+test_headless_monster_faint_empty_inventory (test_gather_monsters.GatherMonstersHeadlessTests.test_headless_monster_faint_empty_inventory) ... ok
+test_collision_lifo_drop_invuln_recoil_and_tie_break (test_gather_monsters.GatherMonstersUnitTests.test_collision_lifo_drop_invuln_recoil_and_tie_break)
+Va chạm sau di chuyển: max 1 hit/bước, hòa id_key, rơi floor(hold/2) LIFO, invuln=90, recoil 60 bước. ... ok
+test_default_monsters_day1_vs_day3 (test_gather_monsters.GatherMonstersUnitTests.test_default_monsters_day1_vs_day3)
+Ngày 1 (và gather độc lập) chỉ có M1; từ Ngày 3 có thêm M2. ... ok
+test_faint_cause_monster_ends_immediately_with_empty_hold (test_gather_monsters.GatherMonstersUnitTests.test_faint_cause_monster_ends_immediately_with_empty_hold)
+HP == 1 trúng cá sấu -> monster_hit, faint(cause='monster'), mất sạch hold, gather_end('fainted'). ... ok
+test_patrol_chase_and_exit_chase (test_gather_monsters.GatherMonstersUnitTests.test_patrol_chase_and_exit_chase)
+Tuần tra 1.0 m/s đảo mốc; d>=10 & dist<=10 -> chase 3.0 m/s; dist>16 hoặc d<10 -> patrol. ... ok
+test_scenario_monsters_validation_rejects_invalid (test_gather_monsters.GatherMonstersUnitTests.test_scenario_monsters_validation_rejects_invalid)
+scenario.py từ chối gather.monsters[] sai loài, ngoài độ sâu [10,30], trùng id, state lạ. ... ok
+test_headless_dive_surface_and_oxygen_drain_refill (test_gather_survival.GatherSurvivalHeadlessTests.test_headless_dive_surface_and_oxygen_drain_refill) ... ok
+test_headless_faint_clears_hold_writes_empty_inventory_before_time_end (test_gather_survival.GatherSurvivalHeadlessTests.test_headless_faint_clears_hold_writes_empty_inventory_before_time_end) ... ok
+test_headless_survival_deterministic_bytes (test_gather_survival.GatherSurvivalHeadlessTests.test_headless_survival_deterministic_bytes) ... ok
+test_dive_and_surface_transitions_emit_once_with_pos (test_gather_survival.GatherSurvivalUnitTests.test_dive_and_surface_transitions_emit_once_with_pos) ... ok
+test_faint_takes_precedence_over_dock_interact_same_tick (test_gather_survival.GatherSurvivalUnitTests.test_faint_takes_precedence_over_dock_interact_same_tick) ... ok
+test_hold_lifo_order_and_capacity (test_gather_survival.GatherSurvivalUnitTests.test_hold_lifo_order_and_capacity) ... ok
+test_oxygen_drain_refill_clamp_and_zero_oxy_reset (test_gather_survival.GatherSurvivalUnitTests.test_oxygen_drain_refill_clamp_and_zero_oxy_reset) ... ok
+test_oxygen_empty_and_choke_interval (test_gather_survival.GatherSurvivalUnitTests.test_oxygen_empty_and_choke_interval) ... ok
+test_surface_depth_boundary_is_at_surface (test_gather_survival.GatherSurvivalUnitTests.test_surface_depth_boundary_is_at_surface) ... ok
+test_state_input_and_clean_stop (test_live.LiveServerTest.test_state_input_and_clean_stop) ... ok
+test_day_sim_gather_to_quan_handoff_no_extra_decay (test_monsters_day_v12.DaySimV12Tests.test_day_sim_gather_to_quan_handoff_no_extra_decay)
+Chuyển pha gather -> quan cùng tick giữ nguyên stock/hold bàn giao và không hao thêm ở tick chuyển. ... ok
+test_day_sim_reserves_item_ids_and_persists_across_days (test_monsters_day_v12.DaySimV12Tests.test_day_sim_reserves_item_ids_and_persists_across_days)
+DaySim reserve ID từ scenario Ngày 1 và giữ item_ids tăng liên tục qua Ngày 2+. ... ok
+test_monster_hit_and_faint_return_clean_lifo_item_dicts (test_monsters_day_v12.MonstersV12Tests.test_monster_hit_and_faint_return_clean_lifo_item_dicts)
+monster_hit.lost và faint.lost trả dict cá thể LIFO sạch (không lộ _units, giữ nguyên fresh). ... ok
+test_bad_frames_raise (test_python_starter_units.Units.test_bad_frames_raise) ... ok
+test_catch_is_a_v10_button_and_attack_is_not (test_python_starter_units.Units.test_catch_is_a_v10_button_and_attack_is_not) ... ok
+test_id_allocator_continues_after_max (test_python_starter_units.Units.test_id_allocator_continues_after_max) ... ok
+test_id_sorting (test_python_starter_units.Units.test_id_sorting) ... ok
+test_input_edges_and_inherit (test_python_starter_units.Units.test_input_edges_and_inherit) ... ok
+test_live_inputs_keep_fast_tap_edge (test_python_starter_units.Units.test_live_inputs_keep_fast_tap_edge) ... ok
+test_session_steps_gather_and_dock (test_python_starter_units.Units.test_session_steps_gather_and_dock) ... ok
+test_arrival_schedule_and_rng_are_deterministic (test_quan_customers.QuanCustomersTest.test_arrival_schedule_and_rng_are_deterministic) ... ok
+test_expiry_clamps_reputation_clears_assigned_dish_and_respects_random_flag (test_quan_customers.QuanCustomersTest.test_expiry_clamps_reputation_clears_assigned_dish_and_respects_random_flag) ... ok
+test_expiry_discards_stove_dish_without_refunding_stock (test_quan_customers.QuanCustomersTest.test_expiry_discards_stove_dish_without_refunding_stock) ... ok
+test_expiry_releases_reservation_before_new_arrival (test_quan_customers.QuanCustomersTest.test_expiry_releases_reservation_before_new_arrival) ... ok
+test_free_table_without_recipe_emits_no_dish (test_quan_customers.QuanCustomersTest.test_free_table_without_recipe_emits_no_dish) ... ok
+test_no_new_arrival_on_closing_tick (test_quan_customers.QuanCustomersTest.test_no_new_arrival_on_closing_tick) ... ok
+test_rejects_conflicts_before_touching_output (test_quan_customers.QuanCustomersTest.test_rejects_conflicts_before_touching_output) ... ok
+test_spawn_filters_stock_reserved_at_other_table (test_quan_customers.QuanCustomersTest.test_spawn_filters_stock_reserved_at_other_table) ... ok
+test_cli_loads_item_inventory_with_explicit_reservation (test_quan_freshness_v12.QuanFreshnessTest.test_cli_loads_item_inventory_with_explicit_reservation) ... ok
+test_cli_rejects_legacy_count_inventory_and_bad_fixture (test_quan_freshness_v12.QuanFreshnessTest.test_cli_rejects_legacy_count_inventory_and_bad_fixture) ... ok
+test_cooks_exact_reserved_items_in_kind_id_order_and_locks_price (test_quan_freshness_v12.QuanFreshnessTest.test_cooks_exact_reserved_items_in_kind_id_order_and_locks_price) ... ok
+test_fixture_price_matches_locked_dish_and_stays_within_fresh_range (test_quan_freshness_v12.QuanFreshnessTest.test_fixture_price_matches_locked_dish_and_stays_within_fresh_range) ... ok
+test_inferred_reservation_respects_explicit_ids_and_recipe (test_quan_freshness_v12.QuanFreshnessTest.test_inferred_reservation_respects_explicit_ids_and_recipe) ... ok
+test_spawn_filters_spoiled_and_selects_freshest_then_id (test_quan_freshness_v12.QuanFreshnessTest.test_spawn_filters_spoiled_and_selects_freshest_then_id) ... ok
+test_spoils_by_id_then_reassigns_by_order_tick_and_table (test_quan_freshness_v12.QuanFreshnessTest.test_spoils_by_id_then_reassigns_by_order_tick_and_table) ... ok
+test_burn_s_null_does_not_burn_ready_dish (test_quan_service.QuanCookingAndServiceTests.test_burn_s_null_does_not_burn_ready_dish)
+In Phase 1 burn_s is null, so a ready dish stays ready indefinitely and increments ready_ticks. ... ok
+test_carry_limit_prevents_picking_second_dish (test_quan_service.QuanCookingAndServiceTests.test_carry_limit_prevents_picking_second_dish)
+With carry_limit = 1 and hand occupied, interacting with a ready stove does not pick up. ... ok
+test_closing_pays_eating_and_leaves_waiting_without_rep_penalty (test_quan_service.QuanCookingAndServiceTests.test_closing_pays_eating_and_leaves_waiting_without_rep_penalty)
+On final tick, serving succeeds -> paid(closing); waiting customer leaves(closing) with no rep penalty -> quan_end. ... ok
+test_full_cook_ready_pick_serve_pay_with_tip (test_quan_service.QuanCookingAndServiceTests.test_full_cook_ready_pick_serve_pay_with_tip)
+Full loop: cook_started -> dish_ready -> dish_picked -> served -> paid (with tip & tip_reputation). ... ok
+test_headless_quan_end_score_and_determinism (test_quan_service.QuanCookingAndServiceTests.test_headless_quan_end_score_and_determinism)
+Headless quan emits paid and quan_end with accurate totals, score formula, and byte-identical determinism. ... ok
+test_no_tip_when_patience_below_threshold (test_quan_service.QuanCookingAndServiceTests.test_no_tip_when_patience_below_threshold)
+Customer served with patience_ratio < tip_min_patience_ratio pays base_price only and no reputation gain. ... ok
+test_reputation_clamped_to_reputation_max (test_quan_service.QuanCookingAndServiceTests.test_reputation_clamped_to_reputation_max)
+Tip reputation gain is clamped to reputation_max. ... ok
+test_serve_on_patience_zero_tick_is_valid (test_quan_service.QuanCookingAndServiceTests.test_serve_on_patience_zero_tick_is_valid)
+Serving on the exact tick patience hits 0 succeeds without triggering customer_left (PRD-0). ... ok
+test_wrong_order_id_on_hand_does_not_serve (test_quan_service.QuanCookingAndServiceTests.test_wrong_order_id_on_hand_does_not_serve)
+Table only accepts the dish matching its customer's order_id (PRD-0). ... ok
+test_idle_stove_picks_oldest_reserved_order_by_order_tick_then_table_id (test_quan_service.QuanInteractPriorityTests.test_idle_stove_picks_oldest_reserved_order_by_order_tick_then_table_id)
+Idle stove chooses reserved order with smallest (order_tick, id_key(table_id)) and emits sorted items. ... ok
+test_nearest_stove_selected_within_interact_radius (test_quan_service.QuanInteractPriorityTests.test_nearest_stove_selected_within_interact_radius)
+When two ready stoves are in interact_radius, the closer one is picked. ... ok
+test_out_of_interact_radius_does_nothing (test_quan_service.QuanInteractPriorityTests.test_out_of_interact_radius_does_nothing)
+Interact beyond interact_radius triggers no stove or table event. ... ok
+test_stove_prioritized_before_table_and_no_fallthrough (test_quan_service.QuanInteractPriorityTests.test_stove_prioritized_before_table_and_no_fallthrough)
+At equal distance stove wins over table; if the selected stove cannot act, the interact turn is skipped (PRD-0). ... ok
+test_tie_break_by_id_key_b2_before_b10 (test_quan_service.QuanInteractPriorityTests.test_tie_break_by_id_key_b2_before_b10)
+Equidistant stoves tie-break using id_key (B2 before B10, not lexicographical B10 < B2). ... ok
+test_day_cli_rejects_conflicts_without_output (test_quan_v11.QuanV11Test.test_day_cli_rejects_conflicts_without_output) ... ok
+test_day_menu_filters_before_stock_and_accepts_repeat_orders (test_quan_v11.QuanV11Test.test_day_menu_filters_before_stock_and_accepts_repeat_orders) ... ok
+test_day_plan_validation_and_forbidden_quan_fields (test_quan_v11.QuanV11Test.test_day_plan_validation_and_forbidden_quan_fields) ... ok
+test_evening_checks_stock_and_rejects_fixture_dishes_outside_plan (test_quan_v11.QuanV11Test.test_evening_checks_stock_and_rejects_fixture_dishes_outside_plan) ... ok
+test_full_menu_and_four_tables_use_preset_schedule (test_quan_v11.QuanV11Test.test_full_menu_and_four_tables_use_preset_schedule) ... ok
+test_quan_cli_uses_v11_preset (test_quan_v11.QuanV11Test.test_quan_cli_uses_v11_preset) ... ok
+test_standalone_can_order_new_dish_and_accept_new_ingredients (test_quan_v11.QuanV11Test.test_standalone_can_order_new_dish_and_accept_new_ingredients) ... ok
+test_two_stoves_cook_independently (test_quan_v11.QuanV11Test.test_two_stoves_cook_independently) ... ok
+test_con_01_ticks_zero_and_end_line (test_smoke_p1.Contract.test_con_01_ticks_zero_and_end_line) ... ok
+test_con_02_deterministic_bytes (test_smoke_p1.Contract.test_con_02_deterministic_bytes) ... ok
+test_con_03_bad_input_exit_2 (test_smoke_p1.Contract.test_con_03_bad_input_exit_2) ... ok
+test_con_03_old_and_future_modes_rejected (test_smoke_p1.Contract.test_con_03_old_and_future_modes_rejected) ... ok
+test_gather_snapshot_has_gather_fields (test_smoke_p1.Contract.test_gather_snapshot_has_gather_fields) ... ok
+test_scenario_out_of_domain_exit_2 (test_smoke_p1.Contract.test_scenario_out_of_domain_exit_2) ... ok
+test_inv_01_gather_writes_inventory_quan_reads_it (test_smoke_p1.Integration.test_inv_01_gather_writes_inventory_quan_reads_it)
+Ví dụ smoke test trong PRD-0 mục G: cập bến ở tick 0, quán đọc kho đúng nội dung. ... ok
+test_inv_01_not_written_when_tick_limit_first (test_smoke_p1.Integration.test_inv_01_not_written_when_tick_limit_first) ... ok
+test_inv_bad_schema_exit_2 (test_smoke_p1.Integration.test_inv_bad_schema_exit_2) ... ok
+test_inventory_and_scenario_stock_conflict (test_smoke_p1.Integration.test_inventory_and_scenario_stock_conflict) ... ok
+test_inventory_flags_mode_mismatch_exit_2 (test_smoke_p1.Integration.test_inventory_flags_mode_mismatch_exit_2) ... ok
+test_move_01_swim_speed_after_ramp (test_smoke_p1.Movement.test_move_01_swim_speed_after_ramp)
+Bỏ 6 tick tăng tốc rồi đo 60 tick: quãng ≈ swim_speed × 1 s (±0.1). Ngang, xuống, chéo (không nhanh hơn). ... ok
+test_move_02_heading_positive_is_down (test_smoke_p1.Movement.test_move_02_heading_positive_is_down) ... ok
+test_move_03_edge_clamp (test_smoke_p1.Movement.test_move_03_edge_clamp)
+Chặn từng mép của vùng nước, kể cả d không âm (không bay lên khỏi mặt nước) và đáy d = 30. ... ok
+test_move_mep_vel_ve_0 (test_smoke_p1.Movement.test_move_mep_vel_ve_0) ... ok
+test_move_ramp_doi_huong_trong_tran (test_smoke_p1.Movement.test_move_ramp_doi_huong_trong_tran)
+Đảo từ +speed sang -speed: vận tốc chạm mục tiêu sau tối đa ramp_max_ticks tick kể từ lúc đổi input. ... ok
+test_time_ends_gather_and_keeps_hold (test_smoke_p1.Movement.test_time_ends_gather_and_keeps_hold) ... ok
+test_khoi_sai_mode_exit_2 (test_smoke_p1.ScenarioModes.test_khoi_sai_mode_exit_2) ... ok
+test_quan_fixture_khong_hop_le_exit_2 (test_smoke_p1.ScenarioModes.test_quan_fixture_khong_hop_le_exit_2) ... ok
+test_quan_player_vel_hop_le (test_smoke_p1.ScenarioModes.test_quan_player_vel_hop_le) ... ok
+test_contract_v13_manifest_has_bench_and_soak_cmds (test_soak_v13.ContractV13Tests.test_contract_v13_manifest_has_bench_and_soak_cmds) ... ok
+test_invalid_bench_cmd_and_soak_cmd_rejected_with_bad_input (test_soak_v13.ContractV13Tests.test_invalid_bench_cmd_and_soak_cmd_rejected_with_bad_input) ... ok
+test_days_6_to_10_cycle_day_plan_and_keep_monotonic_item_ids (test_soak_v13.DaySimCyclingV13Tests.test_days_6_to_10_cycle_day_plan_and_keep_monotonic_item_ids) ... ok
+test_run_soak_counts_unexpected_crash (test_soak_v13.SoakCliV13Tests.test_run_soak_counts_unexpected_crash) ... ok
+test_soak_10_days_seed_7_deterministic_and_records_all_days (test_soak_v13.SoakCliV13Tests.test_soak_10_days_seed_7_deterministic_and_records_all_days) ... ok
+test_soak_invalid_days_exits_2_without_writing_output (test_soak_v13.SoakCliV13Tests.test_soak_invalid_days_exits_2_without_writing_output) ... ok
+test_good (test_team_check.TeamCheck.test_good) ... ok
+test_repo_team_is_valid (test_team_check.TeamCheck.test_repo_team_is_valid) ... ok
+test_template_is_rejected (test_team_check.TeamCheck.test_template_is_rejected) ... ok
+test_too_few_members (test_team_check.TeamCheck.test_too_few_members) ... ok
+test_wrong_size_duplicate_and_outsider (test_team_check.TeamCheck.test_wrong_size_duplicate_and_outsider) ... ok
+test_font_size_and_v12_freshness_preserved (test_ui_warnings_v13.WebWarningsAndContrastTests.test_font_size_and_v12_freshness_preserved)
+Giữ nguyên font sans-serif >= 18px và các phần tử HUD độ tươi v1.2. ... ok
+test_high_contrast_mode_toggle_and_palette (test_ui_warnings_v13.WebWarningsAndContrastTests.test_high_contrast_mode_toggle_and_palette)
+Có chế độ tương phản cao: biến trạng thái, nút UI, phím C/H và bảng màu #000/#fff/#ff0/#f33/#0ff. ... ok
+test_three_icon_text_alerts_present (test_ui_warnings_v13.WebWarningsAndContrastTests.test_three_icon_text_alerts_present)
+Đủ 3 cảnh báo kèm biểu tượng + chữ và điều kiện kích hoạt chuẩn. ... ok
+test_shop_preserves_individual_stock_without_decay_for_600_ticks (test_v12_handoff_ui.ShopV12PreservationTests.test_shop_preserves_individual_stock_without_decay_for_600_ticks) ... ok
+test_web_hud_includes_freshness_bar_and_spoiled_badge_with_18px_font (test_v12_handoff_ui.WebFreshnessHudTests.test_web_hud_includes_freshness_bar_and_spoiled_badge_with_18px_font) ... ok
+
+----------------------------------------------------------------------
+Ran 139 tests in 19.785s
+
+OK
+
+python tools/check_team.py -> exit 0
+OK: 4 thành viên: duyhale95, missher03, Limdim1604, Lmeo2h
