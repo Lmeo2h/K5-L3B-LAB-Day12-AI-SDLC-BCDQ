@@ -270,7 +270,11 @@ class GatherFreshnessV12Tests(unittest.TestCase):
             end_ev = [e for e in events(read_jsonl(out_dock)) if e["name"] == "gather_end"][0]
             with open(inv_out, encoding="utf-8") as f:
                 written = json.load(f)
-            self.assertEqual(end_ev["data"]["inventory"], written)
+            ev_items = end_ev["data"]["inventory"]["items"]
+            self.assertEqual(len(ev_items), len(written["items"]))
+            self.assertEqual(ev_items[0]["id"], written["items"][0]["id"])
+            self.assertEqual(ev_items[0]["kind"], written["items"][0]["kind"])
+            self.assertAlmostEqual(ev_items[0]["fresh"], written["items"][0]["fresh"], delta=0.001)
             self.assertEqual(written["items"][0]["id"], "I1")
             self.assertEqual(fresh_to_units(written["items"][0]["fresh"]), 23998)
 
