@@ -1,19 +1,17 @@
-"""Buổi tối — Mở Quán. Đầy đủ vòng đời khách, giữ chỗ, bếp, bưng/phục vụ, thanh toán/boa/uy tín và kết ca (PRD-0 mục F)."""
+"""Buổi tối — Mở Quán, với thực đơn theo ngày khi chơi một chiến dịch."""
 
 import math
 
+from ..errors import BadInput
 from ..ids import id_key, sort_by_id
 from ..scenario import prepare_quan_customers
 from .ramp import ramp_velocity
-
-TICK = 60.0
-
 
 class QuanSim:
     mode = "quan"
     phase = "quan"
 
-    def __init__(self, tuning, scenario, streams, ids, inventory=None):
+    def __init__(self, tuning, scenario, streams, ids, inventory=None, *, allowed_dishes=None):
         t = tuning["quan"]
         self.t = t
         self.tick_hz = tuning["tick_hz"]
@@ -22,6 +20,11 @@ class QuanSim:
         self.customer_interval_ticks = round(t["customer_interval_s"] * self.tick_hz)
         self.random_customers = scenario.get("random_customers", True)
         self.menu = tuning["menu"]
+        if allowed_dishes is not None:
+            allowed = set(allowed_dishes)
+            if allowed - self.menu.keys():
+                raise BadInput("day_plan có món không nằm trong menu")
+            self.menu = {dish: item for dish, item in self.menu.items() if dish in allowed}
         self.rng = streams
         self.ids = ids
         p = scenario.get("player", {})
@@ -32,13 +35,13 @@ class QuanSim:
         # kho: --inventory HOẶC scenario.stock (cả hai -> cli đã báo mã 2)
         self.stock = dict(inventory if inventory is not None else scenario.get("stock", {}))
         self.hand = scenario.get("hand")
-        self.time_left_ticks = scenario.get("time_left_ticks", int(round(t["duration_s"] * 60)))
+        self.time_left_ticks = scenario.get("time_left_ticks", round(t["duration_s"] * self.tick_hz))
         self.reputation = scenario.get("reputation", t["reputation_initial"])
         self.stoves = [dict(s, state=s.get("state", "idle"), dish=s.get("dish"),
                             cook_ticks_left=s.get("cook_ticks_left", 0), ready_ticks=s.get("ready_ticks", 0))
                        for s in self._merge(t["stoves"], scenario.get("stoves", []))]
         self.tables = self._merge(t["tables"], scenario.get("tables", []))
-        self.customers = prepare_quan_customers(scenario, tuning, self.stock)
+        self.customers = prepare_quan_customers(scenario, tuning, self.stock, menu=self.menu)
         for e in self.customers:
             ids.reserve(e["id"])
         self.money = 0
@@ -52,7 +55,6 @@ class QuanSim:
         by_id = {d["id"]: dict(d) for d in defaults}
         for u in updates:
             if u["id"] not in by_id:
-                from ..errors import BadInput
                 raise BadInput(f"id bếp/bàn không tồn tại: {u['id']}")
             by_id[u["id"]].update(u)
         return sort_by_id(list(by_id.values()))
@@ -324,7 +326,7 @@ class QuanSim:
         self.vel = ramp_velocity(self, (mx * speed, mz * speed), int(self.t.get("ramp_max_ticks", 6)))
         b = self.t["bounds"]
         for i, axis in enumerate(("x", "z")):
-            self.pos[i] += self.vel[i] / TICK
+            self.pos[i] += self.vel[i] / self.tick_hz
             lo, hi = b[axis]
             if self.pos[i] <= lo:
                 self.pos[i], self.vel[i] = lo, max(0.0, self.vel[i])

@@ -39,8 +39,13 @@ class QuanCustomersTest(unittest.TestCase):
         return read_jsonl(out), out.read_bytes()
 
     def test_arrival_schedule_and_rng_are_deterministic(self):
+        extra = [
+            {"id": f"C{i}", "table_id": tb["id"], "dish_id": DISH, "state": "eating",
+             "order_status": "served", "eat_ticks_left": FIRST + 1, "base_price": 60, "tip": 0}
+            for i, tb in enumerate(QUAN["tables"][1:], 1)
+        ]
         scenario = {"stock": {"ca_loc": 1, "bong_sung": 2},
-                    "customers": [dict(ORDER, patience_ticks_left=FIRST + 1)],
+                    "customers": [dict(ORDER, patience_ticks_left=FIRST + 1), *extra],
                     "time_left_ticks": NEXT + 1}
         with Workdir() as w:
             rows, raw = self.read_run(w, scenario, NEXT)
