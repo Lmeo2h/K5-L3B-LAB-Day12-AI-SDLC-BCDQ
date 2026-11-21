@@ -22,15 +22,19 @@ def _between(name, v, lo, hi):
         raise BadInput(f"tuning.{name} phải trong [{lo}, {hi}], đang là {v!r}")
 
 
+SUPPORTED_VERSIONS = ("1.1", "1.2")
+
+
 def load_contract(path=DEFAULT_PATH) -> dict:
     try:
         with open(path, encoding="utf-8") as f:
             c = json.load(f)
     except (OSError, ValueError) as e:
         raise BadInput(f"không đọc được {path}: {e}")
-    if c.get("contract_version") != "1.1":
-        raise BadInput(f"contract_version phải là '1.1', đang là {c.get('contract_version')!r}")
-    validate_tuning(c.get("tuning"))
+    ver = c.get("contract_version")
+    if ver not in SUPPORTED_VERSIONS:
+        raise BadInput(f"contract_version phải là một trong {SUPPORTED_VERSIONS}, đang là {ver!r}")
+    validate_tuning(c.get("tuning"), contract_version=ver)
     return c
 
 
@@ -295,12 +299,29 @@ def _validate_shop(shop):
             prev_stat = stat
 
 
-def validate_tuning(t):
+def _validate_freshness(f):
+    if not isinstance(f, dict):
+        raise BadInput("tuning.freshness phải là object")
+    initial = f.get("initial")
+    if isinstance(initial, bool) or not _num(initial) or initial != 100:
+        raise BadInput(f"tuning.freshness.initial phải là 100, đang là {initial!r}")
+    for key in ("gather_decay_per_s", "quan_decay_per_s"):
+        v = f.get(key)
+        if not _num(v) or v <= 0:
+            raise BadInput(f"tuning.freshness.{key} phải > 0, đang là {v!r}")
+    spoiled_below = f.get("spoiled_below")
+    if not _num(spoiled_below) or not (0 < spoiled_below < initial):
+        raise BadInput(f"tuning.freshness.spoiled_below phải trong (0, {initial}), đang là {spoiled_below!r}")
+
+
+def validate_tuning(t, contract_version="1.1"):
     if not isinstance(t, dict):
         raise BadInput("thiếu khối tuning")
     g, q, menu = t.get("gather"), t.get("quan"), t.get("menu")
     if not isinstance(g, dict) or not isinstance(q, dict) or not isinstance(menu, dict):
         raise BadInput("tuning phải có gather, quan, menu")
+    if contract_version == "1.2" or "freshness" in t:
+        _validate_freshness(t.get("freshness"))
     _validate_gather(g)
     _validate_quan_and_menu(q, menu)
     _validate_day_plan(t.get("day_plan"), menu)

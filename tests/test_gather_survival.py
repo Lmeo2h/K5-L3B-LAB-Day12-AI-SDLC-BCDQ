@@ -123,16 +123,22 @@ class GatherSurvivalUnitTests(unittest.TestCase):
         self.assertEqual(sim.zero_oxy_ticks, 0)
 
     def test_hold_lifo_order_and_capacity(self):
-        sim, g = _make_sim({"hold": ["ca_loc", "bong_sung"]})
+        sim, g = _make_sim({
+            "hold": [
+                {"id": "I1", "kind": "ca_loc", "fresh": 100},
+                {"id": "I2", "kind": "bong_sung", "fresh": 100},
+            ]
+        })
         cap = g["hold_capacity"]
-        self.assertEqual(sim.hold, ["ca_loc", "bong_sung"])
+        self.assertEqual([it["kind"] for it in sim.hold], ["ca_loc", "bong_sung"])
         self.assertEqual(sim._hold_free(), cap - 2)
 
         self.assertTrue(sim._push_hold("ca_linh", 2))
-        self.assertEqual(sim.hold, ["ca_loc", "bong_sung", "ca_linh", "ca_linh"])
+        self.assertEqual([it["kind"] for it in sim.hold], ["ca_loc", "bong_sung", "ca_linh", "ca_linh"])
         # Lấy ra theo LIFO (mới nhất là phần tử cuối)
-        self.assertEqual(sim._pop_hold(), "ca_linh")
-        self.assertEqual(sim.hold, ["ca_loc", "bong_sung", "ca_linh"])
+        popped = sim._pop_hold()
+        self.assertEqual((popped["id"], popped["kind"]), ("I4", "ca_linh"))
+        self.assertEqual([it["kind"] for it in sim.hold], ["ca_loc", "bong_sung", "ca_linh"])
 
         # Không cho vượt quá hold_capacity
         free = sim._hold_free()
@@ -169,12 +175,12 @@ class GatherSurvivalUnitTests(unittest.TestCase):
                 "zero_oxy_ticks": g["choke_interval_ticks"] - 1,
                 "hp": 1,
             },
-            "hold": ["ca_loc"],
+            "hold": [{"id": "I1", "kind": "ca_loc", "fresh": 100}],
         })
         ev = sim.step(InputState((0.0, 0.0), {"interact": True, "catch": False}, {"interact"}))
         self.assertEqual([n for n, _ in ev], ["choke", "faint", "gather_end"])
         self.assertEqual(dict(ev)["gather_end"]["reason"], "fainted")
-        self.assertEqual(sim.inventory_items(), {})
+        self.assertEqual(sim.inventory_items(), [])
 
 
 class GatherSurvivalHeadlessTests(unittest.TestCase):
@@ -218,7 +224,11 @@ class GatherSurvivalHeadlessTests(unittest.TestCase):
                         "zero_oxy_ticks": g["choke_interval_ticks"] - 1,
                         "hp": 1,
                     },
-                    "hold": ["ca_loc", "bong_sung", "ca_linh"],
+                    "hold": [
+                        {"id": "I1", "kind": "ca_loc", "fresh": 100},
+                        {"id": "I2", "kind": "bong_sung", "fresh": 100},
+                        {"id": "I3", "kind": "ca_linh", "fresh": 100},
+                    ],
                     "time_left_ticks": 1,
                 }
             })
@@ -232,14 +242,14 @@ class GatherSurvivalHeadlessTests(unittest.TestCase):
             self.assertEqual(ev_names, ["choke", "faint", "gather_end"])
             end_ev = events(rows, "gather_end")[0]
             self.assertEqual(end_ev["data"]["reason"], "fainted")
-            self.assertEqual(end_ev["data"]["inventory"], {"items": {}})
+            self.assertEqual(end_ev["data"]["inventory"], {"items": []})
             self.assertEqual(rows[-1]["reason"], "fainted")
             final_snap = snapshots(rows)[-1]
             self.assertEqual(final_snap["player"]["hp"], 0)
             self.assertEqual(final_snap["hold"], [])
             self.assertEqual(final_snap["hold_count"], 0)
             with open(inv, encoding="utf-8") as f:
-                self.assertEqual(json.load(f), {"items": {}})
+                self.assertEqual(json.load(f), {"items": []})
 
     def test_headless_survival_deterministic_bytes(self):
         g = load_contract()["tuning"]["gather"]
@@ -251,7 +261,7 @@ class GatherSurvivalHeadlessTests(unittest.TestCase):
                         "oxygen_ticks": 2,
                         "hp": 1,
                     },
-                    "hold": ["ca_loc"],
+                    "hold": [{"id": "I1", "kind": "ca_loc", "fresh": 100}],
                 }
             })
             ticks = g["choke_interval_ticks"] + 5

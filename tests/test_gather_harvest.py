@@ -35,7 +35,7 @@ class GatherHarvestUnitTests(unittest.TestCase):
         dock = self.g["dock_pos"]
         sc = {
             "player": {"pos": list(dock)},
-            "hold": ["ca_loc"],
+            "hold": [{"id": "I1", "kind": "ca_loc", "fresh": 100}],
             "nodes": [{"id": "N1", "kind": "bong_dien_dien", "pos": list(dock)}],
             "random_fish": False,
         }
@@ -44,7 +44,9 @@ class GatherHarvestUnitTests(unittest.TestCase):
         names = [e["name"] for e in evs]
         self.assertEqual(names, ["gather_end"])
         self.assertEqual(evs[0]["data"]["reason"], "docked")
-        self.assertEqual(evs[0]["data"]["inventory"], {"items": {"ca_loc": 1}})
+        inv_items = evs[0]["data"]["inventory"]["items"]
+        self.assertEqual(len(inv_items), 1)
+        self.assertEqual((inv_items[0]["id"], inv_items[0]["kind"]), ("I1", "ca_loc"))
         self.assertTrue(sess.done)
         self.assertEqual(sess.sim.nodes[0]["regrow_ticks"], 0)
 
@@ -68,7 +70,7 @@ class GatherHarvestUnitTests(unittest.TestCase):
             evs[0]["data"],
             {"node_id": "N1", "kind": "bong_dien_dien", "amount": self.g["node_yield"]},
         )
-        self.assertEqual(sess.sim.hold, ["bong_dien_dien"] * self.g["node_yield"])
+        self.assertEqual([it["kind"] for it in sess.sim.hold], ["bong_dien_dien"] * self.g["node_yield"])
         self.assertEqual(sess.sim.nodes[0]["regrow_ticks"], regrow_ticks)
 
         # Đang mọc lại -> không hái được
@@ -111,7 +113,7 @@ class GatherHarvestUnitTests(unittest.TestCase):
         cap = self.g["hold_capacity"]
         sc = {
             "player": {"pos": [20.0, 0.0]},
-            "hold": ["ca_loc"] * cap,
+            "hold": [{"id": f"I{i}", "kind": "ca_loc", "fresh": 100} for i in range(1, cap + 1)],
             "nodes": [{"id": "N1", "kind": "bong_sung", "pos": [20.5, 0.0]}],
             "random_fish": False,
         }
@@ -144,7 +146,7 @@ class GatherHarvestUnitTests(unittest.TestCase):
             evs[0]["data"],
             {"fish_id": "F2", "kind": "ca_linh", "yield": self.g["fish_yield"]["ca_linh"]},
         )
-        self.assertEqual(sess.sim.hold, ["ca_linh"] * self.g["fish_yield"]["ca_linh"])
+        self.assertEqual([it["kind"] for it in sess.sim.hold], ["ca_linh"] * self.g["fish_yield"]["ca_linh"])
         self.assertEqual([f["id"] for f in sess.sim.fish], ["F10"])
         self.assertEqual(sess.sim.catch_cd_ticks, cd_ticks)
 
@@ -179,7 +181,7 @@ class GatherHarvestUnitTests(unittest.TestCase):
         cap = self.g["hold_capacity"]
         sc_full = {
             "player": {"pos": [15.0, 5.0]},
-            "hold": ["bong_sung"] * (cap - 2),
+            "hold": [{"id": f"I{i}", "kind": "bong_sung", "fresh": 100} for i in range(1, cap - 1)],
             "fish": [
                 {"id": "F1", "kind": "ca_linh", "pos": [15.5, 5.0]},
                 {"id": "F2", "kind": "ca_loc", "pos": [16.0, 5.0]},
@@ -260,8 +262,13 @@ class GatherHarvestHeadlessTests(unittest.TestCase):
             self.assertEqual(end_evs[0]["data"]["reason"], "docked")
             with open(inv, encoding="utf-8") as f:
                 saved = json.load(f)
-            self.assertEqual(saved, {"items": {"bong_dien_dien": 1, "ca_linh": 3}})
-            self.assertEqual(end_evs[0]["data"]["inventory"], saved)
+            self.assertEqual([it["id"] for it in saved["items"]], ["I1", "I2", "I3", "I4"])
+            self.assertEqual([it["kind"] for it in saved["items"]], ["bong_dien_dien", "ca_linh", "ca_linh", "ca_linh"])
+            ev_items = end_evs[0]["data"]["inventory"]["items"]
+            self.assertEqual(len(ev_items), len(saved["items"]))
+            for ev_it, sv_it in zip(ev_items, saved["items"]):
+                self.assertEqual((ev_it["id"], ev_it["kind"]), (sv_it["id"], sv_it["kind"]))
+                self.assertAlmostEqual(ev_it["fresh"], sv_it["fresh"], delta=0.001)
             snap = snapshots(rows)[-1]
             self.assertEqual(snap["hold_count"], 4)
 
