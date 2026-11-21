@@ -66,7 +66,7 @@ def _browser_paths():
     elif sys.platform == "darwin":
         paths.extend(Path("/Applications") / f"{app}.app/Contents/MacOS/{app}"
                      for app in ("Google Chrome", "Chromium", "Microsoft Edge"))
-    return list(dict.fromkeys(Path(path).resolve() for path in paths if path and Path(path).is_file()))
+    return list(dict.fromkeys(Path(path).absolute() for path in paths if path and Path(path).is_file()))
 
 
 # Instrument only the benchmark page, leaving the delivered web client unchanged.
@@ -86,9 +86,18 @@ _INSTRUMENT = """
   const draw = drawGather;
   const intervals = [];
   let first = null, start = null, previous = null, finished = false;
+  const publish = (data) => fetch("/__bench_result", {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(data)
+  });
   drawGather = (w, h) => {
     draw(w, h);
     if (finished) return;
+    if (snap.error || snap.finished || snap.state === "finished") {
+      finished = true;
+      publish({error: "gather scene stopped before the benchmark ended"});
+      return;
+    }
     const now = performance.now();
     if (first === null) first = now;
     if (now - first < WARMUP_MS) return;
@@ -102,10 +111,7 @@ _INSTRUMENT = """
     if (now - start >= DURATION_MS) {
       finished = true;
       const load_ms = Math.max(0, performance.timeOrigin + first - LAUNCH_MS);
-      fetch("/__bench_result", {
-        method: "POST", headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({intervals, load_ms})
-      });
+      publish({intervals, load_ms});
     }
   };
 })();
@@ -141,12 +147,17 @@ def _browser_server(tuning, seed, duration, launch_ms, results):
                 return super().do_POST()
             try:
                 data = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-                report = summarize_frames(data["intervals"], data["load_ms"])
+                if not isinstance(data, dict):
+                    raise ValueError("expected a benchmark result object")
+                if data.get("error"):
+                    result = RuntimeError(data["error"])
+                else:
+                    result = summarize_frames(data["intervals"], data["load_ms"])
             except (KeyError, TypeError, ValueError):
                 self._send(400, b"{}")
                 return
             self._send(200, b"{}")
-            results.put(report)
+            results.put(result)
 
     server.httpd.RequestHandlerClass = BenchHandler
     return server
@@ -168,7 +179,10 @@ def _measure_browser(executable, tuning, seed, duration):
                 deadline = time.perf_counter() + WARMUP_S + duration + 12
                 while process.poll() is None and time.perf_counter() < deadline:
                     try:
-                        return results.get(timeout=0.1)
+                        result = results.get(timeout=0.1)
+                        if isinstance(result, RuntimeError):
+                            raise result
+                        return result
                     except Empty:
                         continue
                 raise RuntimeError("browser exited or did not report frames")
@@ -244,6 +258,8 @@ def _measure_software(tuning, seed, duration):
         target_tick = int((time.perf_counter() - first) * tick_hz)
         while session.tick < target_tick and not session.done:
             session.step(idle)
+        if session.done:
+            raise RuntimeError("gather scene stopped before the benchmark ended")
         raster.draw(session.snapshot())
         now = time.perf_counter()
         if start is not None:
@@ -265,6 +281,8 @@ def main(argv=None):
         parser.error("--duration must be positive and finite")
     try:
         tuning = load_contract()["tuning"]
+        if args.duration + WARMUP_S >= tuning["gather"]["duration_s"]:
+            parser.error("--duration and warmup must fit within the default gather shift")
         report = None
         if args.renderer != "software":
             for executable in _browser_paths():
