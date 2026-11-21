@@ -29,6 +29,50 @@ let lastPhase = null;
 let lastDay = 0;
 let lastDaysCompleted = 0;
 let hitBoxes = []; // [{x,y,w,h,action}]
+let highContrast = false;
+
+function toggleHighContrast() {
+  highContrast = !highContrast;
+}
+
+function theme() {
+  if (highContrast) {
+    return {
+      bg: "#000000",
+      fg: "#ffffff",
+      muted: "#ffffff",
+      accent: "#ffff00",
+      cardBg: "#000000",
+      cardBorder: "#ffff00",
+      waterTop: "#001b33",
+      waterBottom: "#000000",
+      quanFloor: "#1a1a1a",
+      quanBorder: "#ffffff",
+      warnMonster: "#00ffff",
+      warnMonsterBorder: "#00ffff",
+      warnOxy: "#ff3b30",
+      warnCustomer: "#ffff00",
+      btnBg: "#000000",
+    };
+  }
+  return {
+    bg: "#0f1720",
+    fg: "#eef4f8",
+    muted: "#b0bec5",
+    accent: "#ffd54f",
+    cardBg: "rgba(10,16,24,0.88)",
+    cardBorder: "#90caf9",
+    waterTop: "#49b0dc",
+    waterBottom: "#08243f",
+    quanFloor: "#c9a36b",
+    quanBorder: "#6b4a2b",
+    warnMonster: "#e1bee7",
+    warnMonsterBorder: "#ab47bc",
+    warnOxy: "#ff5252",
+    warnCustomer: "#ff5252",
+    btnBg: "#37474f",
+  };
+}
 
 const down = new Set();
 const MOVE_KEYS = { w: "u", arrowup: "u", s: "d", arrowdown: "d", a: "l", arrowleft: "l", d: "r", arrowright: "r" };
@@ -90,10 +134,12 @@ addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
   if (e.repeat) { if (k === " " || k.startsWith("arrow")) e.preventDefault(); return; }
   if (screen === "menu") {
+    if (k === "c" || k === "h") { toggleHighContrast(); return; }
     if (k === "enter" || k === " ") { startGame(); e.preventDefault(); }
     return;
   }
   if (skipIntroIfAny()) { e.preventDefault(); return; }
+  if (k === "c" || k === "h") { toggleHighContrast(); return; }
   if (k === "escape" || k === "p") { pulseButton("pause"); e.preventDefault(); return; }
   if (MOVE_KEYS[k]) { down.add(MOVE_KEYS[k]); e.preventDefault(); }
   else if (k === "e") down.add("interact");
@@ -197,19 +243,20 @@ function fit() {
 function text(s, x, y, o = {}) {
   const sz = Math.max(18, o.size || 18);
   ctx.font = (o.bold ? "bold " : "") + sz + "px sans-serif";
-  ctx.fillStyle = o.color || "#eef4f8";
+  ctx.fillStyle = o.color || theme().fg;
   ctx.textAlign = o.align || "left";
   ctx.textBaseline = o.base || "alphabetic";
   ctx.fillText(s, x, y);
 }
 
 function button(label, x, y, w, h, bg, action) {
-  ctx.fillStyle = bg;
+  const th = theme();
+  ctx.fillStyle = highContrast ? th.btnBg : bg;
   ctx.fillRect(x, y, w, h);
-  ctx.strokeStyle = "#ffffff";
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = highContrast ? th.accent : "#ffffff";
+  ctx.lineWidth = highContrast ? 3 : 2;
   ctx.strokeRect(x, y, w, h);
-  text(label, x + w / 2, y + h / 2 + 6, { size: 20, bold: true, align: "center" });
+  text(label, x + w / 2, y + h / 2 + 6, { size: 20, bold: true, align: "center", color: th.fg });
   hitBoxes.push({ x, y, w, h, action });
 }
 
@@ -260,9 +307,10 @@ function drawGather(w, h) {
   const ox = (w - s * (X + 4)) / 2 + 2 * s, oy = top + SKY * s;
   const sx = (x) => ox + x * s, sy = (d) => oy + d * s;
 
-  ctx.fillStyle = "#cfeaf5"; ctx.fillRect(0, top, w, SKY * s);
+  const th = theme();
+  ctx.fillStyle = highContrast ? "#000000" : "#cfeaf5"; ctx.fillRect(0, top, w, SKY * s);
   const g = ctx.createLinearGradient(0, oy, 0, sy(D));
-  g.addColorStop(0, "#49b0dc"); g.addColorStop(1, "#08243f");
+  g.addColorStop(0, th.waterTop); g.addColorStop(1, th.waterBottom);
   ctx.fillStyle = g; ctx.fillRect(sx(0), oy, X * s, D * s);
   ctx.strokeStyle = "#e9f7ff"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(sx(0), oy); ctx.lineTo(sx(X), oy); ctx.stroke();
 
@@ -290,15 +338,16 @@ function drawGather(w, h) {
     text(f.id, sx(f.pos[0]), sy(f.pos[1]) - 0.8 * s, { size: 18, align: "center" });
   });
 
+  const p = snap.player;
   let monsterDanger = false;
   (snap.monsters || []).forEach((m) => {
-    if (m.state === "chase") monsterDanger = true;
-    ctx.fillStyle = m.state === "chase" ? "#b388ff" : m.state === "recoil" ? "#90a4ae" : "#4caf50";
+    const nearMonster = p && Math.hypot(m.pos[0] - p.pos[0], m.pos[1] - p.pos[1]) <= 10;
+    if (m.state === "chase" || nearMonster) monsterDanger = true;
+    ctx.fillStyle = m.state === "chase" ? (highContrast ? "#00ffff" : "#b388ff") : m.state === "recoil" ? "#90a4ae" : "#4caf50";
     ctx.fillRect(sx(m.pos[0]) - 1.1 * s, sy(m.pos[1]) - 0.55 * s, 2.2 * s, 1.1 * s);
-    text(m.id + " (" + m.state + ")", sx(m.pos[0]), sy(m.pos[1]) - 0.8 * s, { size: 18, align: "center", color: "#ffe082" });
+    text(m.id + " (" + m.state + ")", sx(m.pos[0]), sy(m.pos[1]) - 0.8 * s, { size: 18, align: "center", color: th.accent });
   });
 
-  const p = snap.player;
   if (p) {
     const px = sx(p.pos[0]), py = sy(p.pos[1]);
     if (!(p.invuln_ticks > 0 && Math.floor(snap.tick / 4) % 2)) {
@@ -306,27 +355,32 @@ function drawGather(w, h) {
     }
   }
 
-  // HUD v1.1 (>= 18px)
+  // HUD v1.3 (>= 18px, 3 cảnh báo chữ + biểu tượng)
   const lowTime = snap.time_left_ticks <= 30 * 60;
-  text("Ngày " + (snap.day || 1) + " · ⏱ " + fmtTime(snap.time_left_ticks), 16, 32, { size: 22, bold: true, color: lowTime ? "#ff5252" : "#eef4f8" });
+  text("Ngày " + (snap.day || 1) + " · ⏱ " + fmtTime(snap.time_left_ticks), 16, 32, { size: 22, bold: true, color: lowTime ? th.warnOxy : th.fg });
   if (p && p.oxygen_ticks !== undefined && p.oxygen_max_ticks) {
     const frac = p.oxygen_ticks / p.oxygen_max_ticks;
-    bar(220, 12, 240, 26, frac, frac < 0.25 ? "#ef5350" : "#4fc3f7", "Oxy " + Math.ceil(p.oxygen_ticks / 60) + "s");
-    if (p.oxygen_ticks === 0) text("Hết hơi!", 480, 34, { size: 22, bold: true, color: "#ff5252" });
+    bar(220, 12, 240, 26, frac, frac < 0.25 ? th.warnOxy : "#4fc3f7", "Oxy " + Math.ceil(p.oxygen_ticks / 60) + "s");
+    if (p.oxygen_ticks === 0) {
+      text("⚠ Hết hơi!", 480, 34, { size: 22, bold: true, color: th.warnOxy });
+    } else if (frac < 0.25) {
+      text("⚠ Oxy sắp hết!", 480, 34, { size: 22, bold: true, color: th.warnOxy });
+    }
   }
   if (p && p.hp !== undefined && p.hp_max) {
     let hs = "";
     for (let i = 0; i < p.hp_max; i++) hs += i < p.hp ? "♥" : "♡";
-    text(hs, 600, 34, { size: 24, color: p.hp / p.hp_max < 0.25 ? "#ff1744" : "#ff6b81" });
+    text(hs, 670, 34, { size: 24, color: p.hp / p.hp_max < 0.25 ? th.warnOxy : "#ff6b81" });
   }
   if (monsterDanger || (p && p.invuln_ticks > 60)) {
-    ctx.strokeStyle = "#ab47bc"; ctx.lineWidth = 8; ctx.strokeRect(4, 4, w - 8, h - 8);
-    text("Thủy quái!", w - 20, 34, { size: 22, bold: true, align: "right", color: "#e1bee7" });
+    ctx.strokeStyle = th.warnMonsterBorder; ctx.lineWidth = 8; ctx.strokeRect(4, 4, w - 8, h - 8);
+    text("⚠ Thủy quái!", w - 20, 34, { size: 22, bold: true, align: "right", color: th.warnMonster });
   }
   drawDayPlanChecklist(w - 280, 60);
   if (snap.hold && snap.hold_capacity) {
     drawFreshnessBar(snap.hold, 16, h - 68, w - 32, "Giỏ " + snap.hold.length + "/" + snap.hold_capacity);
-    text("WASD bơi · E hái/cập bến · Space bắt cá · Esc/P tạm dừng", w - 16, h - 14, { size: 18, align: "right", color: "#b0bec5" });
+    button("Tương phản cao: " + (highContrast ? "Bật" : "Tắt") + " (C)", 16, h - 34, 250, 30, th.btnBg, toggleHighContrast);
+    text("WASD bơi · E hái/cập bến · Space bắt cá · Esc/P tạm dừng", w - 16, h - 14, { size: 18, align: "right", color: th.muted });
   }
 }
 
@@ -343,6 +397,7 @@ function drawDayPlanChecklist(x, y) {
 }
 
 function drawQuan(w, h) {
+  const th = theme();
   const meta = snap.meta || {};
   const b = meta.bounds || { x: [0, 16], z: [0, 10] };
   const X = b.x[1], Z = b.z[1], top = 74, bottom = 52;
@@ -350,8 +405,8 @@ function drawQuan(w, h) {
   const ox = (w - s * X) / 2, oy = top;
   const sx = (x) => ox + x * s, sy = (z) => oy + (Z - z) * s;
 
-  ctx.fillStyle = "#c9a36b"; ctx.fillRect(sx(0), sy(Z), X * s, Z * s);
-  ctx.strokeStyle = "#6b4a2b"; ctx.lineWidth = 4; ctx.strokeRect(sx(0), sy(Z), X * s, Z * s);
+  ctx.fillStyle = th.quanFloor; ctx.fillRect(sx(0), sy(Z), X * s, Z * s);
+  ctx.strokeStyle = th.quanBorder; ctx.lineWidth = 4; ctx.strokeRect(sx(0), sy(Z), X * s, Z * s);
 
   (snap.stoves || []).forEach((st) => {
     ctx.fillStyle = st.state === "cooking" ? "#e8892b" : st.state === "ready" ? "#6fbf5a" : "#6d6d72";
@@ -359,6 +414,8 @@ function drawQuan(w, h) {
     text(st.id, sx(st.pos[0]), sy(st.pos[1]) + 6, { size: 18, align: "center", color: "#111" });
   });
 
+  const patienceMaxTicks = (meta.patience_s || 60) * 60;
+  let angryCustomer = false;
   const byTable = {};
   (snap.customers || []).forEach((c) => (byTable[c.table_id] = c));
   (snap.tables || []).forEach((tb) => {
@@ -368,7 +425,13 @@ function drawQuan(w, h) {
     if (c) {
       ctx.fillStyle = c.state === "eating" ? "#7bc67b" : "#f4b6c2";
       ctx.beginPath(); ctx.arc(sx(tb.pos[0]), sy(tb.pos[1]) - 1.5 * s, 0.55 * s, 0, Math.PI * 2); ctx.fill();
-      text(c.dish_id || "?", sx(tb.pos[0]), sy(tb.pos[1]) - 2.2 * s, { size: 18, align: "center", color: "#2a1a0a" });
+      text(c.dish_id || "?", sx(tb.pos[0]), sy(tb.pos[1]) - 2.2 * s, { size: 18, align: "center", color: highContrast ? "#ffffff" : "#2a1a0a" });
+      if (c.state !== "eating" && c.patience_ticks_left !== undefined) {
+        const pRatio = Math.max(0, Math.min(1, c.patience_ticks_left / patienceMaxTicks));
+        const pCol = pRatio < 0.25 ? (highContrast ? "#ff3b30" : "#ef5350") : pRatio < 0.5 ? (highContrast ? "#ffff00" : "#ffa726") : "#66bb6a";
+        bar(sx(tb.pos[0]) - 0.9 * s, sy(tb.pos[1]) - 3.1 * s, 1.8 * s, 10, pRatio, pCol, "");
+        if (pRatio < 0.25) angryCustomer = true;
+      }
     }
   });
 
@@ -378,15 +441,20 @@ function drawQuan(w, h) {
   }
 
   const lowTime = snap.time_left_ticks <= 30 * 60;
-  text("Ngày " + (snap.day || 1) + " · ⏱ " + fmtTime(snap.time_left_ticks), 16, 32, { size: 22, bold: true, color: lowTime ? "#ff5252" : "#eef4f8" });
+  text("Ngày " + (snap.day || 1) + " · ⏱ " + fmtTime(snap.time_left_ticks), 16, 32, { size: 22, bold: true, color: lowTime ? th.warnOxy : th.fg });
   text("Tiền: " + (snap.money || 0) + " · Uy tín: " + (snap.reputation || 0).toFixed(1) + " · Điểm: " + (snap.score || 0), 260, 32, { size: 20, bold: true });
+  if (angryCustomer) {
+    ctx.strokeStyle = th.warnCustomer; ctx.lineWidth = 6; ctx.strokeRect(4, 4, w - 8, h - 8);
+    text("⚠ Khách sắp giận!", w - 20, 34, { size: 22, bold: true, align: "right", color: th.warnCustomer });
+  }
   if (Array.isArray(snap.stock)) {
     drawFreshnessBar(snap.stock, 16, 56, w - 32, "Kho");
   } else {
     const stockTxt = Object.keys(snap.stock || {}).map((k) => (KIND_NAME[k] || k) + "×" + snap.stock[k]).join(", ");
-    text("Kho: " + (stockTxt || "(trống)"), 16, 60, { size: 18, color: "#cfd8dc" });
+    text("Kho: " + (stockTxt || "(trống)"), 16, 60, { size: 18, color: th.muted });
   }
-  text("WASD đi · E tương tác · Esc/P tạm dừng", w - 16, h - 18, { size: 18, align: "right", color: "#b0bec5" });
+  button("Tương phản cao: " + (highContrast ? "Bật" : "Tắt") + " (C)", 16, h - 38, 250, 30, th.btnBg, toggleHighContrast);
+  text("WASD đi · E tương tác · Esc/P tạm dừng", w - 16, h - 18, { size: 18, align: "right", color: th.muted });
 }
 
 function drawShop(w, h) {
@@ -402,12 +470,13 @@ function drawShop(w, h) {
 }
 
 function drawCenteredCard(w, h, title, subtitle, btnLabel, btnAction) {
-  ctx.fillStyle = "rgba(10,16,24,0.88)";
+  const th = theme();
+  ctx.fillStyle = th.cardBg;
   ctx.fillRect(w / 2 - 300, h / 2 - 150, 600, 300);
-  ctx.strokeStyle = "#90caf9"; ctx.lineWidth = 3;
+  ctx.strokeStyle = th.cardBorder; ctx.lineWidth = 3;
   ctx.strokeRect(w / 2 - 300, h / 2 - 150, 600, 300);
-  text(title, w / 2, h / 2 - 60, { size: 28, bold: true, align: "center", color: "#ffd54f" });
-  text(subtitle, w / 2, h / 2, { size: 20, align: "center" });
+  text(title, w / 2, h / 2 - 60, { size: 28, bold: true, align: "center", color: th.accent });
+  text(subtitle, w / 2, h / 2, { size: 20, align: "center", color: th.fg });
   button(btnLabel, w / 2 - 130, h / 2 + 50, 260, 56, "#1e88e5", btnAction);
 }
 
@@ -415,7 +484,8 @@ function frame() {
   requestAnimationFrame(frame);
   hitBoxes = [];
   const [w, h] = fit();
-  ctx.fillStyle = "#0f1720";
+  const th = theme();
+  ctx.fillStyle = th.bg;
   ctx.fillRect(0, 0, w, h);
 
   if (introTimer > 0) {
@@ -426,9 +496,10 @@ function frame() {
   }
 
   if (screen === "menu") {
-    text("QUÁN ĂN CHỢ NỔI", w / 2, h / 2 - 110, { size: 36, bold: true, align: "center", color: "#ffd54f" });
-    button("Chơi", w / 2 - 140, h / 2 - 30, 280, 60, "#43a047", startGame);
-    button("Thoát", w / 2 - 140, h / 2 + 50, 280, 60, "#546e7a", () => { screen = "quit"; });
+    text("QUÁN ĂN CHỢ NỔI", w / 2, h / 2 - 120, { size: 36, bold: true, align: "center", color: th.accent });
+    button("Chơi", w / 2 - 140, h / 2 - 40, 280, 56, "#43a047", startGame);
+    button("Tương phản cao: " + (highContrast ? "Bật" : "Tắt") + " (C)", w / 2 - 140, h / 2 + 30, 280, 52, th.btnBg, toggleHighContrast);
+    button("Thoát", w / 2 - 140, h / 2 + 96, 280, 56, "#546e7a", () => { screen = "quit"; });
     return;
   }
   if (screen === "quit") {
@@ -452,7 +523,8 @@ function frame() {
   } else if (screen === "day_result") {
     drawCenteredCard(w, h, "KẾT QUẢ NGÀY " + ((snap.day || 2) - 1), "Tổng thu: " + (snap.earned || 0) + " · Điểm: " + (snap.score || 0), "Tiếp tục", () => { screen = "play"; introTimer = 0; });
   } else if (snap.state === "paused") {
-    drawCenteredCard(w, h, "TẠM DỪNG", "Nhấn Esc / P để tiếp tục", "Tiếp tục", () => pulseButton("pause"));
+    drawCenteredCard(w, h, "TẠM DỪNG", "Nhấn Esc / P để tiếp tục · C/H đổi tương phản", "Tiếp tục", () => pulseButton("pause"));
+    button("Tương phản cao: " + (highContrast ? "Bật" : "Tắt"), w / 2 - 140, h / 2 + 120, 280, 48, theme().btnBg, toggleHighContrast);
   } else if (screen === "summary" || snap.finished) {
     drawCenteredCard(w, h, "TỔNG KẾT", "Tiền: " + (snap.money || 0) + " · Điểm: " + (snap.score || 0), "Chơi lại (R)", restartGame);
   }
