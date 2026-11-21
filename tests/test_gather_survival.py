@@ -101,24 +101,25 @@ class GatherSurvivalUnitTests(unittest.TestCase):
         self.assertEqual(sim.oxygen_ticks, 1)
         self.assertEqual([n for n, _ in ev1], [])
 
-        # Tick 2: 1 -> 0 -> oxygen_empty
+        # Tick 2: 1 -> 0 -> oxygen_empty VÀ choke ngay bước chạm 0 (TICKET-02 v1.1)
         ev2 = _step_move(sim, (0.0, 0.0))
         self.assertEqual(sim.oxygen_ticks, 0)
-        self.assertEqual([n for n, _ in ev2], ["oxygen_empty"])
+        self.assertEqual([n for n, _ in ev2], ["oxygen_empty", "choke"])
+        self.assertEqual(sim.hp, g_hp - 1)
         self.assertEqual(sim.zero_oxy_ticks, 0)
 
-        # Đếm đủ choke_interval_ticks - 1 tick chưa ngạt
+        # Đếm đủ choke_interval_ticks - 1 tick chưa ngạt thêm
         interval = g["choke_interval_ticks"]
         for _ in range(interval - 1):
             ev = _step_move(sim, (0.0, 0.0))
             self.assertEqual([n for n, _ in ev], [])
-        self.assertEqual(sim.hp, g_hp)
+        self.assertEqual(sim.hp, g_hp - 1)
         self.assertEqual(sim.zero_oxy_ticks, interval - 1)
 
-        # Tick thứ choke_interval_ticks -> choke, trừ 1 hp
+        # Tick thứ choke_interval_ticks -> choke tiếp theo, trừ 1 hp
         ev_choke = _step_move(sim, (0.0, 0.0))
         self.assertEqual([n for n, _ in ev_choke], ["choke"])
-        self.assertEqual(sim.hp, g_hp - 1)
+        self.assertEqual(sim.hp, g_hp - 2)
         self.assertEqual(sim.zero_oxy_ticks, 0)
 
     def test_hold_lifo_order_and_capacity(self):

@@ -350,30 +350,35 @@ class GatherSim:
             events.append(("surface", {"pos": list(self.pos)}))
 
     def _step_oxygen_and_choke(self, events: list) -> bool:
-        """Cập nhật oxy theo độ sâu cuối bước, đếm ngạt và xử lý `choke`."""
+        """Cập nhật oxy theo độ sâu cuối bước, đếm ngạt và xử lý `choke` (v1.1: ngạt ngay bước chạm 0)."""
         if self._at_surface():
             refill = int(self.t["oxygen_refill_per_tick"])
             self.oxygen_ticks = min(self.oxygen_max, self.oxygen_ticks + refill)
             self.zero_oxy_ticks = 0
             return False
 
+        choke_interval = int(self.t["choke_interval_ticks"])
+        should_choke = False
         if self.oxygen_ticks > 0:
             self.oxygen_ticks -= 1
             self.zero_oxy_ticks = 0
             if self.oxygen_ticks == 0:
                 events.append(("oxygen_empty", {"pos": list(self.pos)}))
-            return False
+                should_choke = True
+        else:
+            self.zero_oxy_ticks += 1
+            if self.zero_oxy_ticks >= choke_interval:
+                self.zero_oxy_ticks -= choke_interval
+                should_choke = True
 
-        self.zero_oxy_ticks += 1
-        choke_interval = int(self.t["choke_interval_ticks"])
-        if self.zero_oxy_ticks >= choke_interval:
-            self.zero_oxy_ticks -= choke_interval
+        if should_choke:
             self.hp = max(0, self.hp - 1)
             events.append(("choke", {"hp": self.hp}))
             if self.hp <= 0:
                 self.hp = 0
+                lost = list(reversed(self.hold))
                 self._clear_hold()
-                events.append(("faint", {"pos": list(self.pos)}))
+                events.append(("faint", {"cause": "oxygen", "lost": lost, "hp": 0, "pos": list(self.pos)}))
                 self._finish("fainted", events)
                 return True
         return False
