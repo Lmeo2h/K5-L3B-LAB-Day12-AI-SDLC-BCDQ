@@ -11,9 +11,11 @@ from .errors import BadInput
 from .ids import id_key
 from .inventory import KINDS_P1, validate_items
 
-GATHER_KEYS = {"player", "hold", "nodes", "fish", "random_fish", "time_left_ticks"}
+GATHER_KEYS = {"player", "hold", "nodes", "fish", "monsters", "random_fish", "time_left_ticks"}
 GATHER_PLAYER_KEYS = {"pos", "vel", "heading_deg", "hp", "oxygen_ticks", "zero_oxy_ticks",
                       "invuln_ticks", "catch_cd_ticks"}
+MONSTER_KEYS = {"id", "kind", "pos", "waypoints", "state", "target_idx", "recoil_ticks_left", "recoil_origin"}
+MONSTER_STATES = {"patrol", "chase", "recoil"}
 NODE_KINDS = ("bong_dien_dien", "bong_sung")
 FISH_KINDS = ("ca_linh", "ca_loc")
 QUAN_PLAYER_KEYS = {"pos", "vel"}
@@ -88,7 +90,7 @@ def _pos(name, pos, bounds, axes=("x", "d")):
 def _validate_gather(b, tuning):
     g = tuning["gather"]
     bounds = g["bounds"]
-    for arr in ("nodes", "fish"):
+    for arr in ("nodes", "fish", "monsters"):
         if arr in b:
             _check_ids(arr, b[arr])
     if "random_fish" in b and not isinstance(b["random_fish"], bool):
@@ -142,6 +144,44 @@ def _validate_gather(b, tuning):
             raise BadInput(f"fish.{f['id']}: đàn cá phải ở dưới nước")
         if "heading_deg" in f and not _num(f["heading_deg"]):
             raise BadInput(f"fish.{f['id']}.heading_deg phải là số")
+    _validate_monsters(b.get("monsters", []), bounds, g)
+
+
+def _validate_monsters(monsters, bounds, gather_tuning):
+    cfg = gather_tuning.get("monsters") if isinstance(gather_tuning.get("monsters"), dict) else {}
+    depth_lo, depth_hi = cfg.get("depth_range", [10.0, 30.0])
+    recoil_max = int(cfg.get("recoil_ticks", 60))
+    for m in monsters:
+        mid = m["id"]
+        extra = set(m) - MONSTER_KEYS
+        if extra:
+            raise BadInput(f"monsters.{mid}: trường lạ {sorted(extra)}")
+        if m.get("kind") != "ca_sau":
+            raise BadInput(f"monsters.{mid}: kind phải là 'ca_sau'")
+        _pos(f"monsters.{mid}.pos", m.get("pos"), bounds)
+        if not (depth_lo <= m["pos"][1] <= depth_hi):
+            raise BadInput(f"monsters.{mid}.pos: độ sâu phải trong [{depth_lo}, {depth_hi}]")
+        if "waypoints" in m:
+            wps = m["waypoints"]
+            if not isinstance(wps, list) or len(wps) != 2:
+                raise BadInput(f"monsters.{mid}.waypoints phải gồm đúng 2 mốc [x, d]")
+            for idx, wp in enumerate(wps):
+                _pos(f"monsters.{mid}.waypoints[{idx}]", wp, bounds)
+                if not (depth_lo <= wp[1] <= depth_hi):
+                    raise BadInput(f"monsters.{mid}.waypoints[{idx}]: độ sâu phải trong [{depth_lo}, {depth_hi}]")
+        if "state" in m and m["state"] not in MONSTER_STATES:
+            raise BadInput(f"monsters.{mid}.state phải thuộc {sorted(MONSTER_STATES)}")
+        if "target_idx" in m:
+            ti = m["target_idx"]
+            if isinstance(ti, bool) or not isinstance(ti, int) or ti not in (0, 1):
+                raise BadInput(f"monsters.{mid}.target_idx phải là 0 hoặc 1")
+        if "recoil_ticks_left" in m:
+            rtl = m["recoil_ticks_left"]
+            _nonneg_int(f"monsters.{mid}.recoil_ticks_left", rtl)
+            if rtl > recoil_max:
+                raise BadInput(f"monsters.{mid}.recoil_ticks_left vượt quá {recoil_max}")
+        if "recoil_origin" in m:
+            _pos(f"monsters.{mid}.recoil_origin", m["recoil_origin"], bounds)
 
 
 def _validate_quan(b, tuning):

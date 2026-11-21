@@ -24,6 +24,7 @@ import math
 
 from ..ids import id_key, sort_by_id
 from ..inventory import hold_to_items
+from .monsters import init_monsters, monsters_snapshot, step_monsters
 from .ramp import ramp_velocity
 
 TICK = 60.0
@@ -34,7 +35,7 @@ class GatherSim:
     mode = "gather"
     phase = "gather"
 
-    def __init__(self, tuning, scenario, streams, ids):
+    def __init__(self, tuning, scenario, streams, ids, day=1):
         t = tuning["gather"]
         self.t = t
         self.rng = streams
@@ -69,6 +70,7 @@ class GatherSim:
         for coll in (self.nodes, self.fish):
             for e in coll:
                 ids.reserve(e["id"])
+        self.monsters = init_monsters(t, scenario, ids, day=day)
         self.money = 0
         self.earned = 0
         self.reputation = tuning["quan"]["reputation_initial"]
@@ -93,6 +95,7 @@ class GatherSim:
                       for n in sort_by_id(self.nodes)],
             "fish": [{"id": f["id"], "pos": f["pos"], "kind": f["kind"], "heading_deg": f["heading_deg"]}
                      for f in sort_by_id(self.fish)],
+            "monsters": monsters_snapshot(self.monsters),
         }
 
     # --- một bước ---------------------------------------------------------------
@@ -111,6 +114,9 @@ class GatherSim:
         was_surface = self._at_surface()
         self._move(inp)
         if self._update_survival(was_surface, events):
+            return events
+        # 2b. cá sấu tuần tra/rượt đuổi & va chạm (Phase 2 lát 2)
+        if step_monsters(self, events):
             return events
         # 3. interact: bến trước, rồi hái
         if inp.pressed("interact"):
