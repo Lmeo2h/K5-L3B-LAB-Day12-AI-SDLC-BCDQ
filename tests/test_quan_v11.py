@@ -98,7 +98,7 @@ class QuanV11Test(unittest.TestCase):
             self.assertEqual((name, payload["stove_id"], payload["dish_id"]),
                              ("cook_started", stove["id"], dishes[index]))
             listed = self.tuning["menu"][dishes[index]]["price"]
-            self.assertEqual(payload["base_price"], listed - (CONTRACT["contract_version"] == "1.2"))
+            self.assertEqual(payload["base_price"], listed - (CONTRACT["contract_version"] in ("1.2", "1.3")))
         self.assertEqual([s["state"] for s in sim.stoves], ["cooking", "cooking"])
         self.assertEqual(sim.snapshot()["stock"], contract_items({}))
         for stove_id, dish in zip(("B1", "B2"), dishes):

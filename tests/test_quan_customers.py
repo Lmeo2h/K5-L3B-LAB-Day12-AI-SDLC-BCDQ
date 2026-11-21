@@ -122,7 +122,7 @@ class QuanCustomersTest(unittest.TestCase):
     def test_rejects_conflicts_before_touching_output(self):
         fixtures = [
             ({"customers": [ORDER]}, {}),
-            ({"customers": [dict(ORDER, reserved=(["I1", "I2"] if CONTRACT["contract_version"] == "1.2"
+            ({"customers": [dict(ORDER, reserved=(["I1", "I2"] if CONTRACT["contract_version"] in ("1.2", "1.3")
                                                   else {"bong_sung": 2}))]}, {"bong_sung": 2}),
             ({"customers": [dict(ORDER, order_status="assigned")]}, {}),
             ({"customers": [dict(ORDER, order_status="assigned", dish_id="unknown")]}, {}),

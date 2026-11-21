@@ -104,7 +104,7 @@ def read_inventory_v12(path: str, kinds=KINDS_P2) -> list:
 
 def read_inventory(path: str, kinds=KINDS_P2, contract_version: str | None = None):
     ver = _current_contract_version() if contract_version is None else contract_version
-    if ver == "1.2":
+    if ver in ("1.2", "1.3"):
         return read_inventory_v12(path, kinds=kinds)
     try:
         with open(path, encoding="utf-8") as f:
@@ -121,7 +121,7 @@ def read_inventory(path: str, kinds=KINDS_P2, contract_version: str | None = Non
 def hold_to_items(hold: list):
     """Chuyển giỏ sang schema xuất kho: v1.2 trả mảng cá thể sắp theo id_key; v1.1 giữ dict đếm."""
     if not hold:
-        return [] if _current_contract_version() == "1.2" else {}
+        return [] if _current_contract_version() in ("1.2", "1.3") else {}
     if isinstance(hold[0], dict):
         return [
             {"id": it["id"], "kind": it["kind"], "fresh": it["fresh"]}

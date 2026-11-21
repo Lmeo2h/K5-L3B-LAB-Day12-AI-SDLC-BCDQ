@@ -31,7 +31,7 @@ def order(i, table, *, dish=FISH, **fields):
 
 def contract_items(counts):
     """Keep old regression scenarios while changing the wire format at the v1.2 cutover."""
-    if CONTRACT["contract_version"] != "1.2":
+    if CONTRACT["contract_version"] not in ("1.2", "1.3"):
         return counts
     kinds = [kind for kind in sorted(counts) for _ in range(counts[kind])]
     return [item(index, kind) for index, kind in enumerate(kinds, 1)]
@@ -146,7 +146,7 @@ class QuanFreshnessTest(unittest.TestCase):
             self.assertEqual(first["customers"][0]["reserved"], ["I1"])
 
     def test_cli_rejects_legacy_count_inventory_and_bad_fixture(self):
-        if CONTRACT["contract_version"] != "1.2":
+        if CONTRACT["contract_version"] not in ("1.2", "1.3"):
             self.skipTest("Contract v1.2 chưa bật")
         with Workdir() as work:
             invalid = [
