@@ -82,7 +82,7 @@ class DaySim:
                     entry = item
                     break
             if entry is None and plans:
-                entry = plans[min(day - 1, len(plans) - 1)]
+                entry = plans[(day - 1) % len(plans)]
         elif isinstance(plans, dict):
             entry = plans.get(str(day)) or plans.get(day)
         if entry:
@@ -211,7 +211,7 @@ class DaySim:
 
         if old_phase == "gather":
             if self.sub.reason == "fainted":
-                inv = [] if (self.tuning.get("contract_version") == "1.2" or isinstance(self.sub.inventory_items(), list)) else {}
+                inv = [] if (self.tuning.get("contract_version") in ("1.2", "1.3") or isinstance(self.sub.inventory_items(), list)) else {}
             else:
                 inv = self.sub.inventory_items()
             self.sub = self._start_quan(inv)

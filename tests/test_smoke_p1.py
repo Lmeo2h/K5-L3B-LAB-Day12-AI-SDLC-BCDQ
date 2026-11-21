@@ -18,7 +18,7 @@ def contract_hold(kinds):
 
 def contract_items(kinds):
     with open("game.contract.json", encoding="utf-8") as contract:
-        if json.load(contract)["contract_version"] != "1.2":
+        if json.load(contract)["contract_version"] not in ("1.2", "1.3"):
             return Counter(kinds)
     return contract_hold(kinds)
 

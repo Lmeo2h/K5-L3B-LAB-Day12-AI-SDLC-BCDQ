@@ -32,7 +32,7 @@ def _idle_inp(interact=False, catch=False):
 class ContractAndInputsV11Tests(unittest.TestCase):
     def test_contract_v11_structure_and_tuning(self):
         c = load_contract()
-        self.assertIn(c["contract_version"], ("1.1", "1.2"))
+        self.assertIn(c["contract_version"], ("1.1", "1.2", "1.3"))
         t = c["tuning"]
         g = t["gather"]
         self.assertEqual(len(g["nodes"]), 6)
