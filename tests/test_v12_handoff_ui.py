@@ -59,7 +59,8 @@ class WebFreshnessHudTests(unittest.TestCase):
         self.assertIn("drawFreshnessBar", html)
         self.assertIn("[ƯƠN]", html)
         self.assertIn("fresh < 30", html)
-        self.assertIn("18px sans-serif", html)
+        self.assertIn("18px/1.4 sans-serif", html)
+        self.assertIn("Math.max(18,", html)
 
 
 if __name__ == "__main__":
