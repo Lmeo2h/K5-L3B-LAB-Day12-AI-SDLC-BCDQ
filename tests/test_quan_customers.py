@@ -8,6 +8,7 @@ import unittest
 from chonoi.inputs import InputState
 from chonoi.runner import Session
 from tests.helpers import ROOT, Workdir, events, read_jsonl, snapshots, write_json
+from tests.test_quan_freshness_v12 import CONTRACT, contract_items, ingredient_counts, reservation_counts
 
 
 TUNING = json.loads((Path(ROOT) / "game.contract.json").read_text(encoding="utf-8"))["tuning"]
@@ -24,12 +25,14 @@ PAYLOAD = {"order_id": "C9", "dish_id": DISH, "base_price": TUNING["menu"][DISH]
 
 class QuanCustomersTest(unittest.TestCase):
     def run_quan(self, w, scenario, ticks=0, *, inventory=None, name="out", seed=1):
+        if "stock" in scenario:
+            scenario = dict(scenario, stock=contract_items(scenario["stock"]))
         fixture = write_json(w.path(f"{name}.json"), {"quan": scenario})
         out = Path(w.path(f"{name}.jsonl"))
         cmd = [sys.executable, "-m", "chonoi.headless", "--mode", "quan", "--seed", str(seed),
                "--scenario", fixture, "--out", str(out), "--ticks", str(ticks), "--snapshot-every", "1"]
         if inventory is not None:
-            cmd.extend(["--inventory", write_json(w.path("inventory.json"), {"items": inventory})])
+            cmd.extend(["--inventory", write_json(w.path("inventory.json"), {"items": contract_items(inventory)})])
         result = subprocess.run(cmd, cwd=ROOT, capture_output=True)
         return result, out
 
@@ -61,7 +64,8 @@ class QuanCustomersTest(unittest.TestCase):
         self.assertEqual(customer["order_tick"], NEXT)
         self.assertEqual(customer["order_status"], "reserved")
         self.assertEqual(customer["patience_ticks_left"], PATIENCE)
-        self.assertEqual(customer["reserved"], TUNING["menu"][customer["dish_id"]]["recipe"])
+        self.assertEqual(reservation_counts(customer["reserved"], snapshots(rows)[-1]["stock"]),
+                         TUNING["menu"][customer["dish_id"]]["recipe"])
         self.assertEqual(arrivals[0]["data"], {"order_id": "C10", "table_id": TABLE,
                                                "dish_id": customer["dish_id"]})
         self.assertNotEqual(events(other_seed, "customer_arrived")[0]["data"]["dish_id"], customer["dish_id"])
@@ -76,8 +80,9 @@ class QuanCustomersTest(unittest.TestCase):
         scenario = {"customers": [dict(ORDER, patience_ticks_left=FIRST)]}
         with Workdir() as w:
             rows, _ = self.read_run(w, scenario, FIRST, inventory={"ca_loc": 1})
-        self.assertEqual(snapshots(rows)[0]["customers"][0]["reserved"], {"ca_loc": 1})
-        self.assertEqual(snapshots(rows)[-1]["stock"], {"ca_loc": 1})
+        initial = snapshots(rows)[0]
+        self.assertEqual(reservation_counts(initial["customers"][0]["reserved"], initial["stock"]), {"ca_loc": 1})
+        self.assertEqual(ingredient_counts(snapshots(rows)[-1]["stock"]), {"ca_loc": 1})
         self.assertEqual([e["name"] for e in events(rows)], ["customer_left", "customer_arrived"])
         left = events(rows, "customer_left")[0]
         self.assertEqual(left["tick"], FIRST)
@@ -104,7 +109,7 @@ class QuanCustomersTest(unittest.TestCase):
                                         "cook_ticks_left": cooking, "ready_ticks": ready}]}
                 rows, _ = self.read_run(w, scenario, 1)
                 final = snapshots(rows)[-1]
-                self.assertEqual(final["stock"], {})
+                self.assertEqual(final["stock"], contract_items({}))
                 self.assertEqual(final["customers"], [])
                 self.assertEqual(final["stoves"][0], dict(snapshots(rows)[0]["stoves"][0], state="idle",
                                                          dish=None, cook_ticks_left=0, ready_ticks=0))
@@ -117,7 +122,8 @@ class QuanCustomersTest(unittest.TestCase):
     def test_rejects_conflicts_before_touching_output(self):
         fixtures = [
             ({"customers": [ORDER]}, {}),
-            ({"customers": [dict(ORDER, reserved={"bong_sung": 2})]}, {"bong_sung": 2}),
+            ({"customers": [dict(ORDER, reserved=(["I1", "I2"] if CONTRACT["contract_version"] == "1.2"
+                                                  else {"bong_sung": 2}))]}, {"bong_sung": 2}),
             ({"customers": [dict(ORDER, order_status="assigned")]}, {}),
             ({"customers": [dict(ORDER, order_status="assigned", dish_id="unknown")]}, {}),
             ({"customers": [dict(ORDER, state="eating", order_status="served", eat_ticks_left=1)]}, {}),
@@ -142,7 +148,8 @@ class QuanCustomersTest(unittest.TestCase):
         # Phase 1 ships one table. Exercise the same logic with spare seating in memory.
         tuning = deepcopy(TUNING)
         tuning["quan"]["tables"] += [{"id": "T10", "pos": [0, 0]}, {"id": "T2", "pos": [0, 0]}]
-        session = Session("quan", tuning, {"stock": {"ca_loc": 1, "bong_sung": 2}, "customers": [ORDER]}, 1)
+        stock = contract_items({"ca_loc": 1, "bong_sung": 2})
+        session = Session("quan", tuning, {"stock": stock, "customers": [ORDER]}, 1)
         for _ in range(FIRST):
             arrivals = session.step(InputState((0, 0), {}, set()))
         self.assertEqual(arrivals[0]["data"], {"order_id": "C10", "table_id": "T2", "dish_id": OTHER_DISH})

@@ -11,6 +11,17 @@ from chonoi.inputs import LiveInputs
 from chonoi.runner import Session
 
 from helpers import Workdir, events, frames, read_jsonl, write_json
+from tests.test_quan_freshness_v12 import CONTRACT, contract_items, ingredient_counts
+
+
+def _cooked_items(counts, stock):
+    if isinstance(stock, list):
+        return [dict(item, fresh=round(100 - 1 / 240, 6)) for item in stock if item["kind"] in counts]
+    return [kind for kind in sorted(counts) for _ in range(counts[kind])]
+
+
+def _first_tick_price(listed):
+    return listed - (CONTRACT["contract_version"] == "1.2")
 
 
 def _run_headless_py(*args):
@@ -149,7 +160,7 @@ class QuanInteractPriorityTests(unittest.TestCase):
         scenario = {
             "player": {"pos": list(tuning["quan"]["stoves"][0]["pos"])},
             "random_customers": False,
-            "stock": {"ca_linh": 3, "bong_dien_dien": 1, "ca_loc": 1},
+            "stock": contract_items({"ca_linh": 3, "bong_dien_dien": 1, "ca_loc": 1}),
             "customers": [
                 {"id": "C10", "table_id": "T10", "dish_id": "ca_loc_nuong_trui", "order_tick": 120},
                 {"id": "C2", "table_id": "T2", "dish_id": "lau_ca_linh_dien_dien", "order_tick": 120},
@@ -162,10 +173,10 @@ class QuanInteractPriorityTests(unittest.TestCase):
             "stove_id": "B1",
             "order_id": "C2",
             "dish_id": "lau_ca_linh_dien_dien",
-            "items": ["bong_dien_dien", "ca_linh", "ca_linh", "ca_linh"],
-            "base_price": self.tuning["menu"]["lau_ca_linh_dien_dien"]["price"],
+            "items": _cooked_items({"bong_dien_dien": 1, "ca_linh": 3}, scenario["stock"]),
+            "base_price": _first_tick_price(self.tuning["menu"]["lau_ca_linh_dien_dien"]["price"]),
         })
-        self.assertEqual(sess.snapshot()["stock"], {"ca_loc": 1})
+        self.assertEqual(ingredient_counts(sess.snapshot()["stock"]), {"ca_loc": 1})
 
 
 class QuanCookingAndServiceTests(unittest.TestCase):
@@ -187,7 +198,7 @@ class QuanCookingAndServiceTests(unittest.TestCase):
         scenario = {
             "player": {"pos": list(stove_pos)},
             "random_customers": False,
-            "stock": {"ca_loc": 1},
+            "stock": contract_items({"ca_loc": 1}),
             "customers": [
                 {"id": "C1", "table_id": "T1", "dish_id": dish, "order_tick": 0, "patience_ticks_left": patience_max}
             ],
@@ -195,20 +206,21 @@ class QuanCookingAndServiceTests(unittest.TestCase):
         sess = Session("quan", self.tuning, scenario, seed=1)
 
         # 1. Start cooking at idle stove
+        expected_price = _first_tick_price(dish_cfg["price"])
         evs = _step_interact(sess)
         self.assertEqual([e["name"] for e in evs], ["cook_started"])
         self.assertEqual(evs[0]["data"], {
             "stove_id": "B1",
             "order_id": "C1",
             "dish_id": dish,
-            "items": ["ca_loc"],
-            "base_price": dish_cfg["price"],
+            "items": _cooked_items({"ca_loc": 1}, scenario["stock"]),
+            "base_price": expected_price,
         })
         self.assertEqual(sess.sim.stoves[0]["state"], "cooking")
         self.assertEqual(sess.sim.stoves[0]["cook_ticks_left"], cook_ticks)
         self.assertEqual(sess.sim.customers[0]["order_status"], "assigned")
-        self.assertEqual(sess.sim.customers[0]["reserved"], {})
-        self.assertEqual(sess.snapshot()["stock"], {})
+        self.assertEqual(sess.sim.customers[0]["reserved"], contract_items({}))
+        self.assertEqual(sess.snapshot()["stock"], contract_items({}))
 
         # 2. Wait cook_ticks - 1 ticks -> still cooking
         evs = _step_idle(sess, cook_ticks - 1)
@@ -226,14 +238,13 @@ class QuanCookingAndServiceTests(unittest.TestCase):
         evs = _step_interact(sess)
         self.assertEqual([e["name"] for e in evs], ["dish_picked"])
         self.assertEqual(evs[0]["data"], {"stove_id": "B1", "order_id": "C1", "dish_id": dish})
-        self.assertEqual(sess.sim.hand, _dish_payload("C1", dish, dish_cfg["price"]))
+        self.assertEqual(sess.sim.hand, _dish_payload("C1", dish, expected_price))
         self.assertEqual(sess.sim.stoves[0]["state"], "idle")
         self.assertIsNone(sess.sim.stoves[0]["dish"])
 
         # 5. Move to table and serve -> served
         sess.sim.pos = list(table_pos)
         evs = _step_interact(sess)
-        expected_price = dish_cfg["price"]
         expected_tip = math.floor(expected_price * q["tip_rate"])
         expected_patience_left = patience_max - (cook_ticks + 3)
         self.assertEqual([e["name"] for e in evs], ["served"])
@@ -390,7 +401,7 @@ class QuanCookingAndServiceTests(unittest.TestCase):
             "player": {"pos": [9.0, 2.0]},
             "random_customers": False,
             "hand": held,
-            "stock": {"ca_loc": 1},
+            "stock": contract_items({"ca_loc": 1}),
             "customers": [
                 {"id": "C1", "table_id": "T1", "dish_id": "ca_loc_nuong_trui", "order_status": "reserved"},
                 {"id": "C2", "table_id": "T2", "dish_id": "ca_loc_nuong_trui", "order_status": "assigned"},

@@ -2,6 +2,7 @@
 
 | Phase | Người | Công cụ / model | Việc | Token / chi phí ước tính | Ghi chú (AI sai ở đâu?) |
 |---|---|---|---|---|---|
+| 3 | Limdim1604 | Codex | Test-first kho cá thể, hao tươi, giữ lại, giá và fixture; thích nghi hồi quy và lưu smoke chuyển kho | Chưa đo được | Tách kết quả luật trên adapter tạm khỏi kiểm chứng CLI trên Contract v1.2 thật. |
 | 2 | Limdim1604 | Codex | Đối chiếu TICKET-02, test-first Quán v1.1, viết và thử 2 skill, chạy smoke chuyển kho và hồi quy P1 | Chưa đo được | Test lịch ban đầu kỳ vọng bàn vẫn kín ở tick khách đầu hết kiên nhẫn. Đối chiếu thứ tự xử lý rồi kiểm bàn được tái sử dụng đúng tick. |
 | Phase 1 | `missher03` | Antigravity (Gemini 4 Hydrogen Medium) | Slice 2 (`chonoi/sim/gather.py`: `_try_gather_node`, `_try_catch_fish`), `tests/test_gather_harvest.py`, `docs/clarify.md` | ~18k tokens | Lần đầu gọi `InputState(interact_edge=True)` sai signature của `chonoi/inputs.py` (`InputState(move, held, edges)`); đã sửa lại theo `inputs.py` và kiểm chứng pass 100%. |
 | 1 | Limdim1604 | Codex (GPT-6) | Đối chiếu PRD-0 mục D–F, viết test trước, cài luật Slice 3, kiểm chứng và rà diff | Chưa đo được | Lần chạy live đầu lỗi bảng mã Windows; chạy lại với `PYTHONUTF8=1` và xác nhận `/` và `/state` trả HTTP 200. |
