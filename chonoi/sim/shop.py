@@ -1,4 +1,4 @@
-"""Cửa hàng cuối ngày (ShopSim) — nâng cấp oxygen / hp L1->L2 bằng money (TICKET-02, Contract v1.1)."""
+"""Cửa hàng cuối ngày (ShopSim) — nâng cấp oxygen / hp L1->L2 bằng money (TICKET-02/03, Contract v1.2)."""
 
 
 class ShopSim:
@@ -18,7 +18,15 @@ class ShopSim:
         self.earned = earned
         self.reputation = tuning["quan"]["reputation_initial"] if reputation is None else reputation
         self.upgrades = dict(upgrades) if upgrades else {}
-        self.stock = {k: v for k, v in (stock or {}).items() if v > 0}
+        if isinstance(stock, list):
+            self.stock = [
+                {"id": item["id"], "kind": item["kind"], "fresh": item["fresh"]}
+                for item in stock
+            ]
+        elif isinstance(stock, dict):
+            self.stock = {k: v for k, v in stock.items() if v > 0}
+        else:
+            self.stock = []
         self.done = False
         self.reason = None
 
@@ -32,8 +40,9 @@ class ShopSim:
         return []
 
     def snapshot(self) -> dict:
+        stock_snap = [dict(item) for item in self.stock] if isinstance(self.stock, list) else dict(self.stock)
         return {
-            "stock": dict(self.stock),
+            "stock": stock_snap,
             "upgrades": dict(self.upgrades),
             "time_left_ticks": self.time_left_ticks,
         }

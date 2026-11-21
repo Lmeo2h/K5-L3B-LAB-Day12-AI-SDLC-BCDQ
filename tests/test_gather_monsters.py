@@ -96,7 +96,13 @@ class GatherMonstersUnitTests(unittest.TestCase):
         """Va chạm sau di chuyển: max 1 hit/bước, hòa id_key, rơi floor(hold/2) LIFO, invuln=90, recoil 60 bước."""
         sc = {
             "player": {"pos": [60.0, 24.0], "hp": 3},
-            "hold": ["ca_loc", "bong_sung", "ca_linh", "bong_dien_dien", "ca_loc"],  # 5 -> rơi 2 (LIFO)
+            "hold": [
+                {"id": "I1", "kind": "ca_loc", "fresh": 100},
+                {"id": "I2", "kind": "bong_sung", "fresh": 100},
+                {"id": "I3", "kind": "ca_linh", "fresh": 100},
+                {"id": "I4", "kind": "bong_dien_dien", "fresh": 100},
+                {"id": "I5", "kind": "ca_loc", "fresh": 100},
+            ],  # 5 -> rơi 2 (LIFO)
             "monsters": [
                 {
                     "id": "M10",
@@ -124,8 +130,9 @@ class GatherMonstersUnitTests(unittest.TestCase):
         data = hit_evs[0]["data"]
         self.assertEqual(data["monster_id"], "M2")
         self.assertEqual(data["hp"], 2)
-        self.assertEqual(data["lost"], ["ca_loc", "bong_dien_dien"])
-        self.assertEqual(sess.sim.hold, ["ca_loc", "bong_sung", "ca_linh"])
+        self.assertEqual([it["id"] for it in data["lost"]], ["I5", "I4"])
+        self.assertEqual([it["kind"] for it in data["lost"]], ["ca_loc", "bong_dien_dien"])
+        self.assertEqual([it["id"] for it in sess.sim.hold], ["I1", "I2", "I3"])
         self.assertEqual(sess.sim.invuln_ticks, 90)
 
         m2 = next(m for m in sess.sim.snapshot()["monsters"] if m["id"] == "M2")
@@ -150,7 +157,11 @@ class GatherMonstersUnitTests(unittest.TestCase):
         """HP == 1 trúng cá sấu -> monster_hit, faint(cause='monster'), mất sạch hold, gather_end('fainted')."""
         sc = {
             "player": {"pos": [60.0, 24.0], "hp": 1},
-            "hold": ["ca_loc", "bong_sung", "ca_linh"],
+            "hold": [
+                {"id": "I1", "kind": "ca_loc", "fresh": 100},
+                {"id": "I2", "kind": "bong_sung", "fresh": 100},
+                {"id": "I3", "kind": "ca_linh", "fresh": 100},
+            ],
             "monsters": [
                 {
                     "id": "M1",
@@ -170,9 +181,10 @@ class GatherMonstersUnitTests(unittest.TestCase):
         faint_data = evs[1]["data"]
         self.assertEqual(faint_data["cause"], "monster")
         self.assertEqual(faint_data["hp"], 0)
-        self.assertEqual(faint_data["lost"], ["bong_sung", "ca_loc"])
+        self.assertEqual([it["id"] for it in faint_data["lost"]], ["I2", "I1"])
+        self.assertEqual([it["kind"] for it in faint_data["lost"]], ["bong_sung", "ca_loc"])
         self.assertEqual(evs[2]["data"]["reason"], "fainted")
-        self.assertEqual(evs[2]["data"]["inventory"], {"items": {}})
+        self.assertEqual(evs[2]["data"]["inventory"], {"items": []})
         self.assertEqual(sess.sim.hold, [])
         self.assertTrue(sess.done)
 
@@ -221,7 +233,7 @@ class GatherMonstersHeadlessTests(unittest.TestCase):
                 {
                     "gather": {
                         "player": {"pos": [60, 24], "hp": 1},
-                        "hold": ["ca_loc"],
+                        "hold": [{"id": "I1", "kind": "ca_loc", "fresh": 100}],
                         "monsters": [{"id": "M1", "kind": "ca_sau", "pos": [60, 24], "waypoints": [[60, 24], [64, 24]]}],
                     }
                 },
@@ -255,7 +267,7 @@ class GatherMonstersHeadlessTests(unittest.TestCase):
             self.assertEqual(events(rows, "faint")[0]["data"]["cause"], "monster")
             self.assertEqual(snapshots(rows)[-1]["hold_count"], 0)
             with open(inv, encoding="utf-8") as f:
-                self.assertEqual(f.read().strip(), '{"items":{}}')
+                self.assertEqual(f.read().strip(), '{"items":[]}')
 
 
 if __name__ == "__main__":

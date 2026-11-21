@@ -228,6 +228,29 @@ function fmtTime(ticks) {
   return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
 }
 
+function drawFreshnessBar(items, x, y, w, label) {
+  if (!Array.isArray(items)) return;
+  const freshCount = items.filter((it) => typeof it === "string" || (it && it.fresh >= 30)).length;
+  const spoiledCount = items.length - freshCount;
+  const title = label + " (" + freshCount + " tươi" + (spoiledCount > 0 ? ", " + spoiledCount + " ươn" : "") + ")";
+  text(title, x, y, { size: 18, bold: true, color: spoiledCount > 0 ? "#ff8a80" : "#eef4f8" });
+  const cellW = Math.min(180, Math.max(120, Math.floor((w - 32) / Math.max(1, Math.min(6, items.length)))));
+  items.slice(0, 6).forEach((it, idx) => {
+    const kind = typeof it === "string" ? it : (it.kind || "?");
+    const fresh = typeof it === "object" && it.fresh !== undefined ? it.fresh : 100;
+    const spoiled = fresh < 30;
+    const cx = x + idx * (cellW + 8);
+    const cy = y + 8;
+    ctx.fillStyle = spoiled ? "rgba(183,28,28,0.45)" : "rgba(255,255,255,0.12)";
+    ctx.fillRect(cx, cy, cellW, 28);
+    const col = spoiled ? "#ef5350" : fresh >= 60 ? "#66bb6a" : "#ffa726";
+    ctx.fillStyle = col;
+    ctx.fillRect(cx, cy + 22, cellW * Math.max(0, Math.min(1, fresh / 100)), 6);
+    const tag = (KIND_NAME[kind] || kind) + " " + Math.round(fresh) + "%" + (spoiled ? " [ƯƠN]" : "");
+    text(tag, cx + 6, cy + 18, { size: 18, color: spoiled ? "#ffcdd2" : "#eef4f8" });
+  });
+}
+
 function drawGather(w, h) {
   const meta = snap.meta || {};
   const b = meta.bounds || { x: [0, 100], d: [0, 30] };
@@ -302,8 +325,8 @@ function drawGather(w, h) {
   }
   drawDayPlanChecklist(w - 280, 60);
   if (snap.hold && snap.hold_capacity) {
-    text("Giỏ " + snap.hold.length + "/" + snap.hold_capacity, 16, h - 22, { size: 20, bold: true });
-    text("WASD bơi · E hái/cập bến · Space bắt cá · Esc/P tạm dừng", w - 16, h - 22, { size: 18, align: "right", color: "#b0bec5" });
+    drawFreshnessBar(snap.hold, 16, h - 68, w - 32, "Giỏ " + snap.hold.length + "/" + snap.hold_capacity);
+    text("WASD bơi · E hái/cập bến · Space bắt cá · Esc/P tạm dừng", w - 16, h - 14, { size: 18, align: "right", color: "#b0bec5" });
   }
 }
 
@@ -357,8 +380,12 @@ function drawQuan(w, h) {
   const lowTime = snap.time_left_ticks <= 30 * 60;
   text("Ngày " + (snap.day || 1) + " · ⏱ " + fmtTime(snap.time_left_ticks), 16, 32, { size: 22, bold: true, color: lowTime ? "#ff5252" : "#eef4f8" });
   text("Tiền: " + (snap.money || 0) + " · Uy tín: " + (snap.reputation || 0).toFixed(1) + " · Điểm: " + (snap.score || 0), 260, 32, { size: 20, bold: true });
-  const stockTxt = Object.keys(snap.stock || {}).map((k) => (KIND_NAME[k] || k) + "×" + snap.stock[k]).join(", ");
-  text("Kho: " + (stockTxt || "(trống)"), 16, 60, { size: 18, color: "#cfd8dc" });
+  if (Array.isArray(snap.stock)) {
+    drawFreshnessBar(snap.stock, 16, 56, w - 32, "Kho");
+  } else {
+    const stockTxt = Object.keys(snap.stock || {}).map((k) => (KIND_NAME[k] || k) + "×" + snap.stock[k]).join(", ");
+    text("Kho: " + (stockTxt || "(trống)"), 16, 60, { size: 18, color: "#cfd8dc" });
+  }
   text("WASD đi · E tương tác · Esc/P tạm dừng", w - 16, h - 18, { size: 18, align: "right", color: "#b0bec5" });
 }
 
@@ -366,9 +393,12 @@ function drawShop(w, h) {
   text("CỬA HÀNG CUỐI NGÀY " + (snap.day || 1), w / 2, 90, { size: 28, bold: true, align: "center", color: "#ffd54f" });
   text("Tiền hiện có: " + (snap.money || 0) + " · Còn: " + fmtTime(snap.time_left_ticks), w / 2, 130, { size: 20, align: "center" });
   const up = snap.upgrades || { oxygen: 0, hp: 0 };
-  button("1. Nâng Bình Oxy (Cấp " + up.oxygen + "/2)", w / 2 - 220, 200, 440, 64, "#1e88e5", () => sendBody({ buy: "oxygen" }));
-  button("2. Nâng Máu Tối Đa (Cấp " + up.hp + "/2)", w / 2 - 220, 290, 440, 64, "#e53935", () => sendBody({ buy: "hp" }));
+  button("1. Nâng Bình Oxy (Cấp " + (up.oxygen || 0) + "/2)", w / 2 - 220, 200, 440, 64, "#1e88e5", () => sendBody({ buy: "oxygen" }));
+  button("2. Nâng Máu Tối Đa (Cấp " + (up.hp || 0) + "/2)", w / 2 - 220, 290, 440, 64, "#e53935", () => sendBody({ buy: "hp" }));
   button("Xong (Enter)", w / 2 - 140, 390, 280, 60, "#43a047", () => pulseButton("shop_done"));
+  if (Array.isArray(snap.stock) && snap.stock.length > 0) {
+    drawFreshnessBar(snap.stock, 16, h - 78, w - 32, "Kho dư ca tối");
+  }
 }
 
 function drawCenteredCard(w, h, title, subtitle, btnLabel, btnAction) {

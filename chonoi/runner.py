@@ -7,6 +7,7 @@ hoặc buổi kết thúc) -> dòng 'end'. Mỗi tick tối đa một snapshot.
 cả hai chạy CÙNG một lớp sim, không nhân đôi logic.
 """
 
+import inspect
 import math
 import os
 import tempfile
@@ -24,10 +25,16 @@ from .sim.quan import QuanSim
 def build_sim(mode, tuning, scenario, seed, inventory, days=1):
     streams, ids = Streams(seed), IdAllocator()
     if mode == "gather":
-        return GatherSim(tuning, scenario, streams, ids)
+        kwargs = {}
+        if "item_ids" in inspect.signature(GatherSim.__init__).parameters:
+            kwargs["item_ids"] = ids
+        return GatherSim(tuning, scenario, streams, ids, **kwargs)
     if mode == "day":
         return DaySim(tuning, scenario, streams, ids, days=days)
-    return QuanSim(tuning, scenario, streams, ids, inventory=inventory)
+    kwargs = {"inventory": inventory}
+    if "item_ids" in inspect.signature(QuanSim.__init__).parameters:
+        kwargs["item_ids"] = ids
+    return QuanSim(tuning, scenario, streams, ids, **kwargs)
 
 
 def _common(sim, tick, sim_tick, phase_tick, tuning, state):
