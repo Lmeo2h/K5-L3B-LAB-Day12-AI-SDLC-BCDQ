@@ -107,11 +107,11 @@ class GatherSim:
                 n["regrow_ticks"] -= 1
                 if n["regrow_ticks"] == 0:
                     events.append(("node_regrown", {"node_id": n["id"]}))
-        # 2. bơi + chặn mép
+        # 2. bơi + chặn mép + sinh tồn (lát 1)
+        was_surface = self._at_surface()
         self._move(inp)
-        # TODO(nhóm, lát 1): so phân vùng đầu/cuối bước -> dive / surface (data: pos).
-        # TODO(nhóm, lát 1): oxy theo d CUỐI bước (mặt nước hồi, dưới nước trừ), oxygen_empty khi từ dương
-        #   xuống 0, đếm ngạt, choke (-1 Máu). Máu 0 -> faint + gather_end("fainted") với giỏ rỗng, return.
+        if self._update_survival(was_surface, events):
+            return events
         # 3. interact: bến trước, rồi hái
         if inp.pressed("interact"):
             if self._in_dock():
@@ -138,6 +138,43 @@ class GatherSim:
         self.done = True
         self.reason = reason
         events.append(("gather_end", {"reason": reason, "inventory": {"items": self.inventory_items()}}))
+
+    # --- sinh tồn (lát 1) -------------------------------------------------------
+    def _step_region_transition(self, was_surface: bool, events: list):
+        """Phát sự kiện `dive` hoặc `surface` khi chuyển phân vùng đầu/cuối bước."""
+        now_surface = self._at_surface()
+        if was_surface and not now_surface:
+            events.append(("dive", {"pos": list(self.pos)}))
+        elif not was_surface and now_surface:
+            events.append(("surface", {"pos": list(self.pos)}))
+
+    def _step_oxygen_and_choke(self, events: list) -> bool:
+        """Cập nhật oxy theo độ sâu cuối bước, đếm ngạt và xử lý `choke`."""
+        if self._at_surface():
+            refill = int(self.t["oxygen_refill_per_tick"])
+            self.oxygen_ticks = min(self.oxygen_max, self.oxygen_ticks + refill)
+            self.zero_oxy_ticks = 0
+            return False
+
+        if self.oxygen_ticks > 0:
+            self.oxygen_ticks -= 1
+            self.zero_oxy_ticks = 0
+            if self.oxygen_ticks == 0:
+                events.append(("oxygen_empty", {"pos": list(self.pos)}))
+            return False
+
+        self.zero_oxy_ticks += 1
+        choke_interval = int(self.t["choke_interval_ticks"])
+        if self.zero_oxy_ticks >= choke_interval:
+            self.zero_oxy_ticks -= choke_interval
+            self.hp = max(0, self.hp - 1)
+            events.append(("choke", {"hp": self.hp}))
+        return False
+
+    def _update_survival(self, was_surface: bool, events: list) -> bool:
+        """Chạy bước sinh tồn lát 1; trả True nếu lượt chơi kết thúc ngay."""
+        self._step_region_transition(was_surface, events)
+        return self._step_oxygen_and_choke(events)
 
     def _move(self, inp):
         speed = self.t["swim_speed"]
