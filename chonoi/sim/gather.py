@@ -169,12 +169,47 @@ class GatherSim:
             self.zero_oxy_ticks -= choke_interval
             self.hp = max(0, self.hp - 1)
             events.append(("choke", {"hp": self.hp}))
+            if self.hp <= 0:
+                self.hp = 0
+                self._clear_hold()
+                events.append(("faint", {"pos": list(self.pos)}))
+                self._finish("fainted", events)
+                return True
         return False
 
     def _update_survival(self, was_surface: bool, events: list) -> bool:
         """Chạy bước sinh tồn lát 1; trả True nếu lượt chơi kết thúc ngay."""
         self._step_region_transition(was_surface, events)
         return self._step_oxygen_and_choke(events)
+
+    # --- giỏ LIFO (lát 1) -------------------------------------------------------
+    def _hold_capacity(self) -> int:
+        return int(self.t["hold_capacity"])
+
+    def _hold_free(self) -> int:
+        return max(0, self._hold_capacity() - len(self.hold))
+
+    def _can_hold(self, count: int = 1) -> bool:
+        return count >= 0 and len(self.hold) + count <= self._hold_capacity()
+
+    def _push_hold(self, kind: str, count: int = 1) -> bool:
+        """Đẩy `count` nguyên liệu vào cuối giỏ (LIFO) nếu đủ sức chứa."""
+        if count < 0:
+            raise ValueError("count phải >= 0")
+        if not self._can_hold(count):
+            return False
+        self.hold.extend([kind] * count)
+        return True
+
+    def _pop_hold(self):
+        """Lấy phần tử mới nhất ở cuối giỏ (LIFO); trả None nếu giỏ rỗng."""
+        if not self.hold:
+            return None
+        return self.hold.pop()
+
+    def _clear_hold(self):
+        """Làm rỗng giỏ khi ngất."""
+        self.hold = []
 
     def _move(self, inp):
         speed = self.t["swim_speed"]
