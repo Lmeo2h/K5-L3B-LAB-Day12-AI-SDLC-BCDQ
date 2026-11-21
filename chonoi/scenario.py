@@ -24,6 +24,7 @@ QUAN_KEYS = {"player", "stock", "hand", "stoves", "tables", "customers", "random
 CUSTOMER_KEYS = {"id", "table_id", "dish_id", "order_tick", "state", "patience_ticks_left",
                  "eat_ticks_left", "order_status", "reserved", "base_price", "tip"}
 DISH_KEYS = {"order_id", "dish_id", "base_price"}
+DAY_KEYS = {"money", "earned", "reputation", "upgrades", "day_plan"}
 
 
 def _check_ids(name, arr):
@@ -40,24 +41,30 @@ def _check_ids(name, arr):
 
 def load_scenario(path, mode: str, tuning: dict) -> dict:
     if path is None:
-        return {}
-    try:
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
-    except (OSError, ValueError) as e:
-        raise BadInput(f"không đọc được scenario {path}: {e}")
-    if not isinstance(data, dict) or not set(data) <= {"gather", "quan"}:
-        raise BadInput("scenario chỉ được có khối 'gather' hoặc 'quan'")
+        data = {}
+    else:
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, ValueError) as e:
+            raise BadInput(f"không đọc được scenario {path}: {e}") from e
+    if not isinstance(data, dict):
+        raise BadInput("scenario phải là object")
+    if mode == "day":
+        return _validate_day(data, tuning)
     if set(data) - {mode}:
         raise BadInput(f"khối sai mode: chạy --mode {mode} chỉ nhận khối '{mode}'")
-    block = data.get(mode, {})
+    return _validate_mode_block(mode, data.get(mode, {}), tuning)
+
+
+def _validate_mode_block(mode, block, tuning):
     if not isinstance(block, dict):
         raise BadInput(f"khối {mode} phải là object")
     allowed = GATHER_KEYS if mode == "gather" else QUAN_KEYS
     extra = set(block) - allowed
     if extra:
         raise BadInput(f"trường lạ/chưa hỗ trợ trong {mode}: {sorted(extra)}")
-    dur = int(round(tuning[mode]["duration_s"] * 60))
+    dur = round(tuning[mode]["duration_s"] * tuning["tick_hz"])
     if "time_left_ticks" in block:
         t = block["time_left_ticks"]
         if isinstance(t, bool) or not isinstance(t, int) or not (1 <= t <= dur):
@@ -67,6 +74,70 @@ def load_scenario(path, mode: str, tuning: dict) -> dict:
     else:
         _validate_quan(block, tuning)
     return block
+
+
+def _validate_day(data, tuning):
+    if data.keys() - {"gather", "quan", "day"}:
+        raise BadInput("scenario day chỉ nhận các khối gather, quan và day")
+    quan = data.get("quan", {})
+    if isinstance(quan, dict) and quan.keys() & {"stock", "reputation"}:
+        raise BadInput("day không nhận quan.stock hoặc quan.reputation")
+    for mode in ("gather", "quan"):
+        if mode in data:
+            _validate_mode_block(mode, data[mode], tuning)
+
+    day = data.get("day", {})
+    if not isinstance(day, dict) or day.keys() - DAY_KEYS:
+        raise BadInput("khối day phải là object và chỉ chứa các trường được hỗ trợ")
+    money, earned = day.get("money", 0), day.get("earned", 0)
+    _nonneg_int("day.money", money)
+    _nonneg_int("day.earned", earned)
+    if money > earned or ((money or earned) and not {"money", "earned"} <= day.keys()):
+        raise BadInput("day cần cả money và earned khi có số dư đầu kỳ, với money <= earned")
+    if "reputation" in day:
+        _validate_quan_reputation(day["reputation"], tuning["quan"], "day.reputation")
+    if not isinstance(day.get("upgrades", {}), dict):
+        raise BadInput("day.upgrades phải là object")
+    preset = tuning.get("day_plan")
+    if not isinstance(preset, list) or len(preset) != 5:
+        raise BadInput("tuning.day_plan phải có đúng năm kế hoạch")
+    menu = tuning["menu"]
+    expected_days = set()
+    for plan in preset:
+        if not isinstance(plan, dict) or plan.keys() != {"day", "dishes", "ingredients"}:
+            raise BadInput("tuning.day_plan cần day, dishes và ingredients")
+        number = plan["day"]
+        _nonneg_int("tuning.day_plan.day", number)
+        if str(number) in expected_days or not 1 <= number <= len(preset):
+            raise BadInput("tuning.day_plan có số Ngày trùng hoặc ngoài preset")
+        _day_plan_ingredients(plan, menu)
+        expected_days.add(str(number))
+    if "day_plan" in day:
+        overrides = day["day_plan"]
+        if not isinstance(overrides, dict) or overrides.keys() - expected_days:
+            raise BadInput("day.day_plan phải là map theo số Ngày trong preset")
+        for number, plan in overrides.items():
+            if not isinstance(plan, dict) or plan.keys() - {"dishes", "ingredients"}:
+                raise BadInput(f"day.day_plan.{number}: chỉ nhận dishes và ingredients")
+            plan["ingredients"] = _day_plan_ingredients(plan, menu)
+    return data
+
+
+def _day_plan_ingredients(plan, menu):
+    dishes = plan.get("dishes")
+    if not isinstance(dishes, dict) or not dishes:
+        raise BadInput("day_plan.dishes phải là map món có ít nhất một món")
+    required = Counter()
+    for dish, servings in dishes.items():
+        _nonneg_int(f"day_plan.dishes.{dish}", servings)
+        if dish not in menu or servings == 0:
+            raise BadInput("day_plan: món không có trong menu hoặc số suất không dương")
+        required.update({kind: qty * servings for kind, qty in menu[dish]["recipe"].items()})
+    if "ingredients" in plan:
+        ingredients = plan["ingredients"]
+        if validate_items(ingredients, kinds=required) != required:
+            raise BadInput("day_plan.ingredients không khớp tổng công thức và số suất")
+    return dict(sorted(required.items()))
 
 
 def _num(v):
@@ -160,7 +231,7 @@ def _validate_quan(b, tuning):
         if arr in b:
             _check_ids(arr, b[arr])
     if "stock" in b:
-        validate_items(b["stock"])
+        validate_items(b["stock"], kinds=_quan_ingredient_kinds(tuning["menu"]))
     p = b.get("player", {})
     if not isinstance(p, dict) or set(p) - QUAN_PLAYER_KEYS:
         raise BadInput("quan.player chỉ có pos và vel")
@@ -178,9 +249,7 @@ def _validate_quan(b, tuning):
         raise BadInput("hai khách cùng bàn")
     if not isinstance(b.get("random_customers", True), bool):
         raise BadInput("random_customers phải là boolean")
-    reputation = b.get("reputation", t["reputation_initial"])
-    if not _num(reputation) or not t["reputation_min"] <= reputation <= t["reputation_max"]:
-        raise BadInput("reputation nằm ngoài miền uy tín")
+    _validate_quan_reputation(b.get("reputation", t["reputation_initial"]), t, "quan.reputation")
 
     customers = prepare_quan_customers(b, tuning, b.get("stock"))
     dishes = [b["hand"]] if b.get("hand") is not None else []
@@ -199,10 +268,21 @@ def _validate_quan(b, tuning):
     _validate_quan_dishes(customers, dishes)
 
 
-def prepare_quan_customers(scenario, tuning, stock):
+def _validate_quan_reputation(value, t, field):
+    if not _num(value) or not t["reputation_min"] <= value <= t["reputation_max"]:
+        raise BadInput(f"{field} nằm ngoài miền uy tín")
+
+
+def _quan_ingredient_kinds(menu):
+    return set(KINDS_P1).union(*(dish["recipe"] for dish in menu.values()))
+
+
+def prepare_quan_customers(scenario, tuning, stock, *, menu=None):
     """Dựng khách theo mục D. Kho file chỉ có sau khi CLI đã đọc scenario."""
     patience = round(tuning["quan"]["patience_s"] * tuning["tick_hz"])
-    menu = tuning["menu"]
+    full_menu = tuning["menu"]
+    menu = full_menu if menu is None else menu
+    kinds = _quan_ingredient_kinds(full_menu)
     customers = []
     for fixture in scenario.get("customers", []):
         label = f"customers.{fixture['id']}"
@@ -225,7 +305,7 @@ def prepare_quan_customers(scenario, tuning, stock):
             raise BadInput(f"{label}: khách đang chờ không thể có đơn served hoặc timer ăn")
 
         expected = menu[dish]["recipe"] if status == "reserved" else {}
-        if "reserved" in fixture and validate_items(fixture["reserved"]) != expected:
+        if "reserved" in fixture and validate_items(fixture["reserved"], kinds=kinds) != expected:
             raise BadInput(f"{label}: giữ chỗ không khớp công thức hoặc trạng thái đơn")
         customer["reserved"] = dict(expected)
         customers.append(customer)
