@@ -8,7 +8,6 @@ import unittest
 from chonoi.errors import BadInput
 from chonoi.ids import IdAllocator
 from chonoi.inputs import InputState
-from chonoi import inventory
 from chonoi.rng import Streams
 from chonoi.scenario import load_scenario
 from chonoi.sim.quan import QuanSim
@@ -54,9 +53,8 @@ def reservation_counts(reserved, stock):
 
 class QuanFreshnessTest(unittest.TestCase):
     def setUp(self):
-        if not hasattr(inventory, "validate_items_v12"):
-            self.skipTest("Chờ bộ đọc kho cá thể của Slice 1")
         self.tuning = deepcopy(CONTRACT["tuning"])
+        self.tuning["contract_version"] = "1.2"
         self.tuning.setdefault("freshness", {"initial": 100, "gather_decay_per_s": .5,
                                              "quan_decay_per_s": .25, "spoiled_below": 30})
 

@@ -5,6 +5,7 @@ from collections import Counter
 
 from ..errors import BadInput
 from ..ids import id_key, sort_by_id
+from ..inventory import FRESH_SCALE, fresh_to_units, units_to_fresh
 from ..scenario import prepare_quan_customers, prepare_quan_stock, quan_uses_items, select_quan_items
 from .ramp import ramp_velocity
 
@@ -40,11 +41,8 @@ class QuanSim:
         raw_stock = inventory if inventory is not None else scenario.get("stock", empty_stock)
         self.stock = prepare_quan_stock(raw_stock, tuning)
         if self.fresh_stock:
-            from ..inventory import FRESH_SCALE
-
-            self.fresh_scale = FRESH_SCALE
-            self.initial_units = round(freshness["initial"] * FRESH_SCALE)
-            self.spoiled_below = round(freshness["spoiled_below"] * FRESH_SCALE)
+            self.initial_units = fresh_to_units(freshness["initial"])
+            self.spoiled_below = fresh_to_units(freshness["spoiled_below"])
             self.decay_units = round(freshness["quan_decay_per_s"] * FRESH_SCALE / self.tick_hz)
         self.hand = scenario.get("hand")
         self.time_left_ticks = scenario.get("time_left_ticks", round(t["duration_s"] * self.tick_hz))
@@ -120,7 +118,7 @@ class QuanSim:
             before = item["_units"]
             after = max(0, before - self.decay_units)
             item["_units"] = after
-            item["fresh"] = round(after / self.fresh_scale, 6)
+            item["fresh"] = units_to_fresh(after)
             if after < self.spoiled_below <= before:
                 spoiled.add(item["id"])
                 events.append(("spoiled", {"item_id": item["id"], "kind": item["kind"], "location": "stock"}))

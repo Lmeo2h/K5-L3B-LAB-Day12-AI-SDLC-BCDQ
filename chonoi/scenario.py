@@ -9,7 +9,7 @@ from collections import Counter
 
 from .errors import BadInput
 from .ids import id_key, sort_by_id
-from .inventory import KINDS_P2, validate_items, validate_items_v12
+from .inventory import KINDS_P2, _current_contract_version, fresh_to_units, validate_items, validate_items_v12
 
 GATHER_KEYS = {"player", "hold", "nodes", "fish", "monsters", "random_fish", "time_left_ticks"}
 GATHER_PLAYER_KEYS = {"pos", "vel", "heading_deg", "hp", "oxygen_ticks", "zero_oxy_ticks",
@@ -336,23 +336,23 @@ def _quan_ingredient_kinds(menu):
 
 
 def quan_uses_items(tuning, stock=None):
-    version = tuning.get("contract_version")
-    if version is None:
-        return "freshness" in tuning
-    return version == "1.2" or isinstance(stock, list)
+    if "freshness" not in tuning:
+        return False
+    if isinstance(stock, list):
+        return True
+    version = tuning.get("contract_version") or _current_contract_version()
+    return version == "1.2"
 
 
 def prepare_quan_stock(stock, tuning):
     if not quan_uses_items(tuning, stock):
         return validate_items(stock, kinds=_quan_ingredient_kinds(tuning["menu"]))
-    from .inventory import FRESH_SCALE, validate_items_v12
-
     items = validate_items_v12(stock)
     threshold = tuning["freshness"]["spoiled_below"]
-    threshold_units = round(threshold * FRESH_SCALE)
+    threshold_units = fresh_to_units(threshold)
     result = []
     for item in items:
-        units = round(item["fresh"] * FRESH_SCALE)
+        units = fresh_to_units(item["fresh"])
         if item["fresh"] < threshold:
             units = min(units, threshold_units - 1)
         result.append(dict(item, _units=units))
@@ -437,9 +437,7 @@ def prepare_quan_customers(scenario, tuning, stock, *, menu=None):
 
 
 def _reserve_quan_fixture_items(customers, stock, menu, freshness):
-    from .inventory import FRESH_SCALE
-
-    threshold = round(freshness["spoiled_below"] * FRESH_SCALE)
+    threshold = fresh_to_units(freshness["spoiled_below"])
     by_id = {item["id"]: item for item in stock}
     held = set()
     orders = [c for c in customers if c["order_status"] == "reserved"]
